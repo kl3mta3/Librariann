@@ -52,6 +52,8 @@ instructions specific to your instance.
 
 ### Docker
 
+Images are published to Docker Hub at [kl3mta3/librariann](https://hub.docker.com/r/kl3mta3/librariann).
+
 ```bash
 docker run -d \
   --name librariann \
@@ -59,6 +61,21 @@ docker run -d \
   -v /path/to/config:/librariann/config \
   -v /path/to/your/media:/media \
   kl3mta3/librariann:latest
+```
+
+Or with Docker Compose:
+
+```yaml
+services:
+  librariann:
+    image: kl3mta3/librariann:latest
+    container_name: librariann
+    ports:
+      - "5000:5000"
+    volumes:
+      - /path/to/config:/librariann/config
+      - /path/to/your/media:/media
+    restart: unless-stopped
 ```
 
 Everything Librariann needs to persist - its database, settings, cache, and covers - lives under the mounted
