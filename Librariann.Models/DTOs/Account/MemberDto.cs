@@ -1,0 +1,29 @@
+using System;
+using System.Collections.Generic;
+using Librariann.Models.Entities.Enums;
+using System.ComponentModel.DataAnnotations;
+
+namespace Librariann.Models.DTOs.Account;
+
+/// <summary>
+/// Represents a member of a Librariann server.
+/// </summary>
+public sealed record MemberDto
+{
+    public int Id { get; init; }
+    public string? Username { get; init; }
+    public string? Email { get; init; }
+    /// <summary>
+    /// If the member is still pending or not
+    /// </summary>
+    public bool IsPending { get; init; }
+    public AgeRestrictionDto? AgeRestriction { get; init; }
+    public DateTime Created { get; init; }
+    public DateTime CreatedUtc { get; init; }
+    public DateTime LastActive { get; init; }
+    public DateTime LastActiveUtc { get; init; }
+    public IEnumerable<LibraryDto>? Libraries { get; init; }
+    public IEnumerable<string>? Roles { get; init; }
+    [EnumDataType(typeof(IdentityProvider))]
+    public IdentityProvider IdentityProvider { get; init; }
+}

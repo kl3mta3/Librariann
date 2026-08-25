@@ -1,0 +1,21 @@
+using Librariann.Models.Entities.Enums;
+using System.ComponentModel.DataAnnotations;
+
+namespace Librariann.Models.DTOs.Statistics;
+
+public sealed record StatCountWithFormat<T> : ICount<T>
+{
+    /// <summary>
+    /// The day of the readings
+    /// </summary>
+    public T Value { get; set; } = default!;
+    /// <summary>
+    /// Number of pages read
+    /// </summary>
+    public long Count { get; set; }
+    /// <summary>
+    /// Format of those files
+    /// </summary>
+    [EnumDataType(typeof(MangaFormat))]
+    public MangaFormat Format { get; set; }
+}

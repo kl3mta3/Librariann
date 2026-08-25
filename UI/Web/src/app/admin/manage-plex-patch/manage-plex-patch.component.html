@@ -1,0 +1,84 @@
+<ng-container *transloco="let t; prefix: 'manage-plex-patch'">
+
+  <p>{{t('description')}}</p>
+
+  <!-- Address to hand the patcher -->
+  <div class="mb-3">
+    <h4>{{t('address-title')}}</h4>
+    <p class="text-muted">{{t('address-subtitle')}}</p>
+
+    <div class="address-row d-flex align-items-center gap-2">
+      <code class="address flex-fill text-break">{{serverAddress()}}</code>
+      <button type="button" class="btn btn-secondary btn-sm flex-shrink-0" (click)="copy(serverAddress())">
+        <i class="fa-regular fa-copy me-1" aria-hidden="true"></i>{{t('copy')}}
+      </button>
+    </div>
+
+    @if (port(); as p) {
+      <p class="text-muted mt-2 mb-0">{{t('port-hint', {port: p})}}</p>
+    }
+    @if (hostName().length > 0) {
+      <p class="text-muted mb-0">{{t('host-name-hint', {hostName: hostName()})}}</p>
+    }
+  </div>
+
+  <div class="setting-section-break"></div>
+
+  <!-- Download -->
+  <div class="mb-3">
+    <h4>{{t('download-title')}}</h4>
+    <p>{{t('download-subtitle')}}</p>
+    <a class="btn btn-primary" [href]="releasesUrl" target="_blank" rel="noopener noreferrer">
+      <i class="fa-solid fa-download me-1" aria-hidden="true"></i>{{t('download-btn')}}
+    </a>
+  </div>
+
+  <div class="setting-section-break"></div>
+
+  <!-- Steps -->
+  <div class="mb-3">
+    <h4>{{t('steps-title')}}</h4>
+    <ol class="steps">
+      <li>{{t('step-1')}}</li>
+      <li>{{t('step-2')}}</li>
+      <li>{{t('step-3')}} <code>C:\Program Files\Plex\Plex Media Server</code></li>
+      <li>{{t('step-4')}}</li>
+      <li>{{t('step-5')}}</li>
+      <li>
+        {{t('step-6')}} <code>config\appsettings.json</code>
+        <div class="code-block mt-2">
+          <button type="button" class="btn btn-secondary btn-sm copy-btn" (click)="copy(embeddingExample)">
+            <i class="fa-regular fa-copy me-1" aria-hidden="true"></i>{{t('copy')}}
+          </button>
+          <pre><code>{{embeddingExample}}</code></pre>
+        </div>
+      </li>
+      <li>{{t('step-7')}}</li>
+    </ol>
+
+    <div class="alert alert-secondary mb-0" role="alert">
+      <i class="fa-solid fa-circle-info me-1" aria-hidden="true"></i>{{t('repatch-note')}}
+    </div>
+  </div>
+
+  <div class="setting-section-break"></div>
+
+  <!-- Cloudflare tunnel -->
+  <div class="mb-3">
+    <h4>{{t('tunnel-title')}}</h4>
+    <p>{{t('tunnel-subtitle')}}</p>
+    <ol class="steps">
+      <li>{{t('tunnel-step-1')}}</li>
+      <li>{{t('tunnel-step-2')}}</li>
+      <li>{{t('tunnel-step-3')}}</li>
+      <li>{{t('tunnel-step-4')}}</li>
+      <li>{{t('tunnel-step-5')}}</li>
+      <li>{{t('tunnel-step-6')}}</li>
+      <li>{{t('tunnel-step-7')}}</li>
+    </ol>
+
+    <p>{{t('tunnel-outro')}}</p>
+    <p class="mb-0">{{t('tunnel-example')}}</p>
+  </div>
+
+</ng-container>

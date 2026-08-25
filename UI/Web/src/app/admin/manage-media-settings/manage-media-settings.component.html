@@ -1,0 +1,135 @@
+<ng-container *transloco="let t; prefix: 'manage-media-settings'">
+    <form [formGroup]="settingsForm">
+      <div class="mb-4">
+        <p>
+          {{t('encode-as-description-part-1')}} <a href="https://caniuse.com/?search=webp" target="_blank" rel="noopener noreferrer">{{t('encode-as-description-part-2')}}</a>/<a href="https://caniuse.com/?search=avif" target="_blank" rel="noopener noreferrer">{{t('encode-as-description-part-3')}}</a>
+        </p>
+        <div class="alert alert-warning">
+          {{t('encode-as-warning')}}
+        </div>
+      </div>
+
+      <ng-container>
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('encodeMediaAs'); as formControl) {
+            <app-setting-item [title]="t('encode-as-label')" [subtitle]="t('encode-as-tooltip')">
+              <ng-template #view>
+                {{formControl.value | encodeFormat}}
+              </ng-template>
+              <ng-template #edit>
+                <select class="form-select" formControlName="encodeMediaAs">
+                  @for (opt of allEncodeFormats; track opt) {
+                    <option [value]="opt">{{opt | encodeFormat}}</option>
+                  }
+                </select>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('pdfRenderResolution'); as formControl) {
+            <app-setting-item [title]="t('pdf-render-resolution-label')" [subtitle]="t('pdf-render-resolution-tooltip')">
+              <ng-template #view>
+                {{formControl!.value | pdfRenderResolution}}
+              </ng-template>
+              <ng-template #edit>
+                <select class="form-select" formControlName="pdfRenderResolution">
+                  @for (opt of allPdfRenderResolutions; track opt) {
+                    <option [ngValue]="opt">{{opt | pdfRenderResolution}}</option>
+                  }
+                </select>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('coverImageSize'); as formControl) {
+            <app-setting-item [title]="t('cover-image-size-label')" [subtitle]="t('cover-image-size-tooltip')">
+              <ng-template #view>
+                {{formControl!.value | coverImageSize}}
+              </ng-template>
+              <ng-template #edit>
+                <select class="form-select" formControlName="coverImageSize">
+                  @for (opt of allCoverImageSizes; track opt) {
+                    <option [value]="opt">{{opt | coverImageSize}}</option>
+                  }
+                </select>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('bookmarksDirectory'); as formControl) {
+            <app-setting-item [title]="t('bookmark-dir-label')" [subtitle]="t('bookmark-dir-tooltip')">
+              <ng-template #view>
+                {{formControl!.value}}
+              </ng-template>
+              <ng-template #edit>
+                <div class="input-group">
+                  <input readonly id="settings-bookmarksdir" class="form-control" formControlName="bookmarksDirectory" type="text" aria-describedby="change-bookmarks-dir">
+                  <button id="change-bookmarks-dir" class="btn btn-primary" (click)="openDirectoryChooser(formControl.value, 'bookmarksDirectory')">
+                    {{t('change')}}
+                  </button>
+                </div>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('metadataProviderContactEmail'); as formControl) {
+            <app-setting-item [title]="t('metadata-provider-contact-email-label')" [subtitle]="t('metadata-provider-contact-email-tooltip')">
+              <ng-template #view>
+                {{formControl.value || t('metadata-provider-contact-email-unset')}}
+              </ng-template>
+              <ng-template #edit>
+                <input class="form-control" formControlName="metadataProviderContactEmail" type="email" placeholder="you@example.com">
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('ffmpegPath'); as formControl) {
+            <app-setting-item [title]="t('ffmpeg-path-label')" [subtitle]="t('ffmpeg-path-tooltip')">
+              <ng-template #view>
+                {{formControl.value}}
+              </ng-template>
+              <ng-template #edit>
+                <input class="form-control" formControlName="ffmpegPath" type="text" placeholder="ffmpeg">
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-1 ms-1">
+          <div class="col-auto">
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="ffmpegInstalling" (click)="startFfmpegInstall()">
+              @if (ffmpegInstalling) {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+              }
+              {{t('ffmpeg-install')}}
+            </button>
+            @if (ffmpegInstallStatus; as install) {
+              <span class="ms-2">
+                @if (install.inProgress) {
+                  <span class="text-muted">{{ffmpegInstallProgressLabel()}}</span>
+                } @else if (install.success) {
+                  <span class="text-success">{{t('ffmpeg-install-success')}}</span>
+                } @else if (install.error) {
+                  <span class="text-danger">{{install.error}}</span>
+                }
+              </span>
+            }
+          </div>
+        </div>
+        <p class="text-muted small ms-1 mb-0">{{t('ffmpeg-install-hint')}}</p>
+
+      </ng-container>
+
+    </form>
+
+</ng-container>

@@ -1,0 +1,58 @@
+// Accent colors cycled across tiles (via the .variant-N classes below) so a grid of genres/tags
+// reads as a mosaic instead of a wall of identical gray boxes. Muted enough to stay inside the
+// existing dark theme - just a top accent bar and a faint tint, not a full recolor.
+$tag-card-variant-colors: #e5a00d, #4fb8af, #b06ad1, #5f9ee0, #d1685a, #7fb069;
+
+.tag-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tag-card-accent, #e5a00d) 6%, var(--bs-card-color, #2c2c2c)), var(--bs-card-color, #2c2c2c) 60%);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border-top: 0.1875rem solid var(--tag-card-accent, #e5a00d);
+  box-shadow: 0 0.125rem 0.3125rem rgba(0,0,0,0.2);
+  transition: transform 0.2s ease, background 0.3s ease;
+  cursor: pointer;
+
+  &.not-selectable:hover {
+    cursor: not-allowed;
+    background-color: var(--bs-card-color, #2c2c2c) !important;
+  }
+
+  @for $i from 0 through 5 {
+    &.variant-#{$i} {
+      --tag-card-accent: #{nth($tag-card-variant-colors, $i + 1)};
+    }
+  }
+}
+
+.tag-card:hover {
+  background-color: var(--card-hover-bg-color);
+  //transform: translateY(-3px); // Cool effect but has a weird background issue. ROBBIE: Fix this
+  & .tag-name, & .tag-meta {
+    color: var(--card-hover-text-color)
+  }
+}
+
+.tag-name {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  min-height: 4.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-meta {
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted-color, #bbb);
+}

@@ -1,0 +1,52 @@
+.address-row {
+  background-color: var(--input-bg-color);
+  border: 1px solid var(--input-border-color);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.address {
+  font-size: 1rem;
+  color: var(--input-text-color);
+  background: none;
+  padding: 0;
+}
+
+.steps {
+  li {
+    margin-bottom: 0.75rem;
+  }
+
+  code {
+    background-color: var(--input-bg-color);
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    word-break: break-all;
+  }
+}
+
+.code-block {
+  position: relative;
+
+  pre {
+    background-color: var(--input-bg-color);
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin: 0;
+    overflow-x: auto;
+
+    code {
+      background: none;
+      padding: 0;
+      white-space: pre;
+    }
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+  }
+}

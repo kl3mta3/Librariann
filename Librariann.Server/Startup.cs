@@ -1,0 +1,601 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Hangfire;
+using HtmlAgilityPack;
+using Librariann.API.Database;
+using Librariann.API.Services;
+using Librariann.Common;
+using Librariann.Common.Constants;
+using Librariann.Common.EnvironmentInfo;
+using Librariann.Database;
+using Librariann.Models.Constants;
+using Librariann.Models.DTOs.Internal;
+using Librariann.Models.Entities.Enums;
+using Librariann.Models.Extensions;
+using Librariann.Server.Extensions;
+using Librariann.Server.Logging;
+using Librariann.Server.ManualMigrations.v0._7._11;
+using Librariann.Server.ManualMigrations.v0._7._14;
+using Librariann.Server.ManualMigrations.v0._7._9;
+using Librariann.Server.ManualMigrations.v0._8._0;
+using Librariann.Server.ManualMigrations.v0._8._1;
+using Librariann.Server.ManualMigrations.v0._8._2;
+using Librariann.Server.ManualMigrations.v0._8._4;
+using Librariann.Server.ManualMigrations.v0._8._5;
+using Librariann.Server.ManualMigrations.v0._8._6;
+using Librariann.Server.ManualMigrations.v0._8._7;
+using Librariann.Server.ManualMigrations.v0._8._8;
+using Librariann.Server.ManualMigrations.v0._8._9;
+using Librariann.Server.ManualMigrations.v0._9._0;
+using Librariann.Server.ManualMigrations.v0._9._1;
+using Librariann.Server.Middleware;
+using Librariann.Server.Swagger;
+using Librariann.Services.SignalR;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Caching.Hybrid;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
+using Microsoft.OpenApi;
+using Serilog;
+using TaskScheduler = Librariann.Services.TaskScheduler;
+
+namespace Librariann.Server;
+
+public class Startup
+{
+    private readonly IConfiguration _config;
+    private readonly IWebHostEnvironment _env;
+
+    public Startup(IConfiguration config, IWebHostEnvironment env)
+    {
+        _config = config;
+        _env = env;
+
+        // Disable Hangfire Automatic Retry
+        GlobalJobFilters.Filters.Add(new AutomaticRetryAttribute { Attempts = 0 });
+    }
+
+    // This method gets called by the runtime. Use this method to add services to the container.
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.Configure<AppSettingsDto>(_config);
+        services.AddApplicationServices(_config, _env);
+
+        services.AddControllers(options =>
+        {
+            options.CacheProfiles.Add(ResponseCacheProfiles.Minute,
+                new CacheProfile()
+                {
+                    Duration = 60 * 1,
+                    Location = ResponseCacheLocation.Client,
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.FiveMinute,
+                new CacheProfile()
+                {
+                    Duration = 60 * 5,
+                    Location = ResponseCacheLocation.Client,
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.TenMinute,
+                new CacheProfile()
+                {
+                    Duration = 60 * 10,
+                    Location = ResponseCacheLocation.Client,
+                    NoStore = false
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.Hour,
+                new CacheProfile()
+                {
+                    Duration = 60 * 60,
+                    Location = ResponseCacheLocation.Client,
+                    NoStore = false
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.Statistics,
+                new CacheProfile()
+                {
+                    Duration = _env.IsDevelopment() ? 0 : 60 * 60 * 6,
+                    Location = ResponseCacheLocation.Client,
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.Month,
+                new CacheProfile()
+                {
+                    Duration = (int) TimeSpan.FromDays(30).TotalSeconds,
+                    Location = ResponseCacheLocation.Client,
+                    NoStore = false
+                });
+            options.CacheProfiles.Add(ResponseCacheProfiles.LicenseCache,
+                new CacheProfile()
+                {
+                    Duration = (int) TimeSpan.FromHours(4).TotalSeconds,
+                    Location = ResponseCacheLocation.Client,
+                    NoStore = false
+                });
+        });
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.All;
+            foreach(var proxy in _config.GetSection("KnownProxies").AsEnumerable().Where(c => c.Value != null)) {
+                options.KnownProxies.Add(IPAddress.Parse(proxy.Value!));
+            }
+        });
+        services.AddCors();
+        var dataProtectionDirectory = new DirectoryInfo(Path.Join(Directory.GetCurrentDirectory(), "config",
+            "data-protection-keys"));
+        Directory.CreateDirectory(dataProtectionDirectory.FullName);
+        services.AddDataProtection()
+            .SetApplicationName("Librariann")
+            .PersistKeysToFileSystem(dataProtectionDirectory);
+        services.AddIdentityServices(_config, _env);
+
+
+        services.AddSwaggerGen(c =>
+        {
+            c.SchemaFilter<EnumSchemaFilter>();
+
+            c.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Version = BuildInfo.Version.ToString(),
+                Title = BuildInfo.AppName,
+                Description = $"Librariann provides APIs authenticated via an Auth Key passed in the `x-api-key` header. Generate an Auth Key under User Settings → Manage Auth Keys, paste it into the Authorize panel, and all Try It requests will include it. Assume all fields of a payload are required unless marked optional. Built against v{BuildInfo.Version}",
+                License = new OpenApiLicense
+                {
+                    Name = "GPL-3.0",
+                    Url = new Uri("https://www.gnu.org/licenses/gpl-3.0.html")
+                },
+            });
+
+            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var filePath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+            c.IncludeXmlComments(filePath, true);
+
+            c.AddSecurityDefinition("AuthKey", new OpenApiSecurityScheme
+            {
+                Description = "Auth Key authentication. Enter your Auth key from your user settings",
+                Name = Headers.ApiKey,
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "ApiKeyScheme"
+            });
+
+            c.AddSecurityRequirement((document) => new OpenApiSecurityRequirement()
+            {
+                [new OpenApiSecuritySchemeReference("AuthKey", document)] = []
+            });
+
+
+            c.AddServer(new OpenApiServer
+            {
+                Url = "{protocol}://{hostpath}",
+                Variables = new Dictionary<string, OpenApiServerVariable>
+                {
+                    { "protocol", new OpenApiServerVariable { Default = "http", Enum = ["http", "https"]} },
+                    { "hostpath", new OpenApiServerVariable { Default = "localhost:5000" } }
+                }
+            });
+        });
+
+        AddCompressionAndCaching(services);
+
+        services.AddRateLimiter(options =>
+        {
+            options.AddPolicy("Authentication", httpContext =>
+                new AuthenticationRateLimiterPolicy().GetPartition(httpContext));
+        });
+
+        services.AddHangfire(configuration => configuration
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseInMemoryStorage()
+            .UseSerilogLogProvider());
+            //.UseSQLiteStorage("config/Hangfire.db"));
+            //// UseSQLiteStorage - SQLite has some issues around resuming jobs when aborted (and locking can cause high utilization)
+            /// (NOTE: There is code to clear jobs on startup a redditor gave me)
+
+        // Add the processing server as IHostedService
+        services.AddHangfireServer(options =>
+        {
+            options.Queues = [TaskSchedulerConstants.ScanQueue, TaskSchedulerConstants.DefaultQueue];
+        });
+    }
+
+    private static void AddCompressionAndCaching(IServiceCollection services)
+    {
+        services.AddResponseCompression(options =>
+        {
+            options.Providers.Add<BrotliCompressionProvider>();
+            options.Providers.Add<GzipCompressionProvider>();
+            options.MimeTypes =
+                ResponseCompressionDefaults.MimeTypes.Concat(
+                    ["image/jpeg", "image/jpg", "image/png", "image/avif", "image/gif", "image/webp", "image/tiff"]);
+            options.EnableForHttps = true;
+        });
+        services.Configure<BrotliCompressionProviderOptions>(options =>
+        {
+            options.Level = CompressionLevel.Fastest;
+        });
+
+        services.AddResponseCaching();
+        services.AddHybridCache(options =>
+        {
+            options.MaximumPayloadBytes = 1024 * 1024; // 1MB max per entry
+            options.MaximumKeyLength = 512;
+            options.DefaultEntryOptions = new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromMinutes(10),
+                LocalCacheExpiration = TimeSpan.FromMinutes(10)
+            };
+        });
+    }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env,
+        IHostApplicationLifetime applicationLifetime, IServiceProvider serviceProvider,
+        IDirectoryService directoryService, IUnitOfWork unitOfWork, IVersionUpdaterService versionService)
+    {
+
+        var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+
+
+        ExecuteMigrations(serviceProvider, directoryService, unitOfWork, versionService, logger);
+
+        app.UseMiddleware<ExceptionMiddleware>();
+        app.UseMiddleware<SecurityEventMiddleware>();
+
+        if (env.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", $"{BuildInfo.AppName} API {BuildInfo.Version}");
+            });
+        }
+
+        if (env.IsDevelopment())
+        {
+            app.UseHangfireDashboard();
+        }
+
+        app.UseResponseCompression();
+
+        app.UseForwardedHeaders();
+
+        app.UseRateLimiter();
+
+        var basePath = Configuration.BaseUrl;
+        app.UsePathBase(basePath);
+        if (!env.IsDevelopment())
+        {
+            // We don't update the index.html in local as we don't serve from there
+            UpdateBaseUrlInIndex(basePath);
+
+            // Update DB with what's in config
+            var dataContext = serviceProvider.GetRequiredService<DataContext>();
+            var setting = dataContext.ServerSetting.SingleOrDefault(x => x.Key == ServerSettingKey.BaseUrl);
+            if (setting != null)
+            {
+                setting.Value = basePath;
+            }
+
+            dataContext.SaveChanges();
+        }
+
+        app.UseRouting();
+
+        // Ordering is important. Cors, authentication, authorization
+        if (env.IsDevelopment())
+        {
+            app.UseCors(policy => policy
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials() // For SignalR token query param
+                .WithOrigins("http://localhost:4200", $"http://{GetLocalIpAddress()}:4200", $"http://{GetLocalIpAddress()}:5000")
+                .WithExposedHeaders("Content-Disposition", "Pagination"));
+        }
+        else
+        {
+            // Allow CORS for Librariann's url
+            app.UseCors(policy => policy
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials() // For SignalR token query param
+                .WithExposedHeaders("Content-Disposition", "Pagination"));
+        }
+
+        app.UseResponseCaching();
+
+        // Ensure static files is before our custom middleware stack
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            // bcmap files needed for PDF reader localizations (https://github.com/Kareadita/Librariann/issues/2970)
+            // ftl files are needed for PDF zoom options (https://github.com/Kareadita/Librariann/issues/3995)
+            ContentTypeProvider = new FileExtensionContentTypeProvider
+            {
+                Mappings =
+                {
+                    [".bcmap"] = "application/octet-stream",
+                    [".ftl"] = "text/plain"
+                }
+            },
+            HttpsCompression = HttpsCompressionMode.Compress,
+            OnPrepareResponse = ctx =>
+            {
+                ctx.Context.Response.Headers[HeaderNames.CacheControl] = "public,max-age=" + TimeSpan.FromHours(24);
+                ctx.Context.Response.Headers[Headers.RobotsTag] = "noindex,nofollow";
+            }
+        });
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // Must be first after Auth, will set authentication data for the rest of the Controllers/Middleware
+        app.UseMiddleware<UserContextMiddleware>();
+        app.UseMiddleware<ClientInfoMiddleware>();
+        app.UseMiddleware<DeviceTrackingMiddleware>(); // This must be after ClientInfo and Authorization
+        app.UseMiddleware<UpdateUserAsActiveMiddleware>(); // This must be LAST
+
+        app.UseDefaultFiles();
+
+
+
+        app.UseSerilogRequestLogging(opts
+            =>
+        {
+            opts.EnrichDiagnosticContext = LogEnricher.EnrichFromRequest;
+            opts.IncludeQueryInRequestPath = true;
+        });
+
+        var embeddingPolicy = Librariann.Common.Security.EmbeddingPolicy.Create(Configuration.EmbeddingOrigins);
+        if (embeddingPolicy.RejectedOrigins.Count > 0)
+            logger.LogWarning("Ignored {Count} invalid embedding origin(s); only exact HTTP(S) origins are accepted",
+                embeddingPolicy.RejectedOrigins.Count);
+        if (Configuration.AllowIFraming)
+            logger.LogWarning("AllowIFraming is deprecated and no longer disables clickjacking protection; configure exact EmbeddingOrigins instead");
+
+        app.Use(async (context, next) =>
+        {
+            context.Response.Headers[HeaderNames.Vary] = new[] { "Accept-Encoding" };
+
+            var isEmbedDocument = context.Request.Path.StartsWithSegments("/embed");
+            if (!isEmbedDocument || !embeddingPolicy.AllowsExternalOrigins)
+            {
+                context.Response.Headers.XFrameOptions = "SAMEORIGIN";
+                context.Response.Headers.ContentSecurityPolicy = "frame-ancestors 'self';";
+            }
+            else
+            {
+                context.Response.Headers.ContentSecurityPolicy = embeddingPolicy.FrameAncestors;
+            }
+
+            await next();
+        });
+
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapControllers();
+            endpoints.MapHub<MessageHub>("hubs/messages");
+            endpoints.MapHub<LogHub>("hubs/logs");
+            if (env.IsDevelopment())
+            {
+                endpoints.MapHangfireDashboard();
+            }
+            endpoints.MapFallbackToController("Index", "Fallback");
+        });
+
+        applicationLifetime.ApplicationStopping.Register(OnShutdown);
+        applicationLifetime.ApplicationStarted.Register(() =>
+        {
+            try
+            {
+                logger.LogInformation("{ApplicationName} - v{Version}", BuildInfo.AppName, BuildInfo.Version);
+            }
+            catch (Exception)
+            {
+                Console.WriteLine($"{BuildInfo.AppName} - v{BuildInfo.Version}");
+            }
+
+            TaskScheduler.RemoveLibrariannPlusTasks();
+            logger.LogInformation("Premium hosted services are not part of Librariann");
+        });
+
+        logger.LogInformation("Starting with base url as {BaseUrl}", basePath);
+    }
+
+    private static void ExecuteMigrations(IServiceProvider serviceProvider, IDirectoryService directoryService,
+        IUnitOfWork unitOfWork, IVersionUpdaterService versionService, ILogger<Program> logger)
+    {
+        try
+        {
+            Task.Run(async () =>
+                {
+                    // Apply all migrations on startup
+                    var dataContext = serviceProvider.GetRequiredService<DataContext>();
+
+                    logger.LogInformation("Running Migrations");
+
+                    #region Migrations
+
+                    #region v0.7.9
+                    await MigrateUserLibrarySideNavStream.Migrate(unitOfWork, dataContext, logger);
+                    #endregion
+
+                    #region v0.7.11
+                    await MigrateSmartFilterEncoding.Migrate(unitOfWork, dataContext, logger);
+                    await new MigrateLibrariesToHaveAllFileTypes().RunAsync(dataContext, logger);
+                    #endregion
+
+                    #region v0.7.14
+                    await MigrateEmailTemplates.Migrate(directoryService, logger);
+                    await MigrateVolumeNumber.Migrate(dataContext, logger);
+                    await new MigrateWantToReadImport(unitOfWork, directoryService).RunAsync(dataContext, logger);
+                    await MigrateManualHistory.Migrate(dataContext, logger);
+                    await MigrateClearNightlyExternalSeriesRecords.Migrate(dataContext, logger);
+                    #endregion
+
+                    #region v0.8.0
+                    await MigrateVolumeLookupName.Migrate(dataContext, unitOfWork, logger);
+                    await MigrateChapterNumber.Migrate(dataContext, logger);
+                    await MigrateProgressExport.Migrate(dataContext, directoryService, logger);
+                    await MigrateMixedSpecials.Migrate(dataContext, unitOfWork, directoryService, logger);
+                    await MigrateLooseLeafChapters.Migrate(dataContext, unitOfWork, directoryService, logger);
+                    await MigrateChapterFields.Migrate(dataContext, unitOfWork, logger);
+                    await MigrateChapterRange.Migrate(dataContext, unitOfWork, logger);
+                    await MigrateMangaFilePath.Migrate(dataContext, logger);
+                    await MigrateCollectionTagToUserCollections.Migrate(dataContext, unitOfWork, logger);
+                    #endregion
+
+                    #region v0.8.1
+                    await MigrateLowestSeriesFolderPath.Migrate(dataContext, unitOfWork, logger);
+                    #endregion
+
+                    #region v0.8.2
+                    await MigrateInitialInstallData.Migrate(dataContext, logger, directoryService);
+                    await MigrateSeriesLowestFolderPath.Migrate(dataContext, logger, directoryService);
+                    #endregion
+
+                    #region v0.8.4
+                    await MigrateLowestSeriesFolderPath2.Migrate(dataContext, unitOfWork, logger);
+                    await ManualMigrateRemovePeople.Migrate(dataContext, logger);
+                    await ManualMigrateUnscrobbleBookLibraries.Migrate(dataContext, logger);
+                    #endregion
+
+                    #region v0.8.5
+                    await ManualMigrateBlacklistTableToSeries.Migrate(dataContext, logger);
+                    await ManualMigrateInvalidBlacklistSeries.Migrate(dataContext, logger);
+                    await ManualMigrateScrobbleErrors.Migrate(dataContext, logger);
+                    await ManualMigrateNeedsManualMatch.Migrate(dataContext, logger);
+                    await MigrateProgressExportForV085.Migrate(dataContext, directoryService, logger);
+                    #endregion
+
+                    #region v0.8.6
+                    await ManualMigrateScrobbleSpecials.Migrate(dataContext, logger);
+                    await ManualMigrateScrobbleEventGen.Migrate(dataContext, logger);
+                    #endregion
+
+                    #region v0.8.7
+                    await ManualMigrateReadingProfiles.Migrate(dataContext, logger);
+                    #endregion
+
+                    #region v0.8.8
+                    await ManualMigrateEnableMetadataMatchingDefault.Migrate(dataContext, unitOfWork, logger);
+                    await ManualMigrateBookReadingProgress.Migrate(dataContext, unitOfWork, logger);
+                    #endregion
+
+                    #region v0.8.9
+                    await new MigrateBadKoreaderProgress().RunAsync(dataContext, logger);
+                    await new MigrateProgressToReadingSessions().RunAsync(dataContext, logger);
+                    await new MigrateMissingCreatedUtcDate().RunAsync(dataContext, logger);
+                    await new MigrateTotalReads().RunAsync(dataContext, logger);
+                    await new MigrateToAuthKeys().RunAsync(dataContext, logger);
+                    await new MigrateMissingAppUserRatingDateColumns().RunAsync(dataContext, logger);
+                    await new MigrateFormatToActivityDataV2().RunAsync(dataContext, logger);
+                    await new MigrateIncorrectUtcTimes().RunAsync(dataContext, logger);
+                    #endregion
+
+                    #region v0.9.0
+                    await new ManualMigrateEnsureNoReadOnlyAdmins().RunAsync(dataContext, logger);
+                    await new ManualMigrationRemoveMoreInGenreStream().RunAsync(dataContext, logger);
+                    await new ManualMigrateSmartFilterEntityTypeBackfill().RunAsync(dataContext, logger);
+                    await new ManualMigrateEpubFontFamilyDetailsBackfill().RunAsync(dataContext, logger);
+                    #endregion
+
+                    #region v0.9.1
+
+                    await new ManualMigrationScrobbleRework().RunAsync(dataContext, logger);
+                    await new ManualMigrationLibrariannScrobbleProviders().RunAsync(dataContext, logger);
+                    await new ManualMigrationMetadataProvider().RunAsync(dataContext, logger);
+                    await new ManualMigrationOAuthMigration().RunAsync(dataContext, logger);
+                    await new ManualMigrateRelationshipAuditHistory().RunAsync(dataContext, logger);
+                    await new ManualMigrationSetDefaultMetadataProvidersForLibrary().RunAsync(dataContext, logger);
+                    await new ManualMigrationMetadataSettingFieldRenumber().RunAsync(dataContext, logger);
+                    await new ManualMigrateOriginalNameBackfill().RunAsync(dataContext, logger);
+                    await new ManualMigrateNormalizedOriginalNameBackfill().RunAsync(dataContext, logger);
+                    await new ManualMigrateLastReadDates().RunAsync(dataContext, logger);
+                    await new ManualMigrateVersionCacheFiles(directoryService).RunAsync(dataContext, logger);
+                    await new ManualMigrationExternalSeriesMetadataIds().RunAsync(dataContext, logger);
+                    await new ManualMigrationCorrectAuditStatus().RunAsync(dataContext, logger);
+
+                    #endregion
+
+                    #endregion
+
+                    //  Update the version in the DB after all migrations are run
+                    var installVersion = await unitOfWork.SettingsRepository.GetSettingAsync(ServerSettingKey.InstallVersion);
+                    var isVersionDifferent = installVersion.Value != BuildInfo.Version.ToString();
+                    installVersion.Value = BuildInfo.Version.ToString();
+                    unitOfWork.SettingsRepository.Update(installVersion);
+                    await unitOfWork.CommitAsync();
+
+                    logger.LogInformation("Running Migrations - complete");
+
+                    if (isVersionDifferent)
+                    {
+                        // Clear the GitHub cache so update stuff shows correctly
+                        versionService.BustGithubCache();
+                    }
+
+                }).GetAwaiter()
+                .GetResult();
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "An error occurred during migration");
+        }
+    }
+
+    private static void UpdateBaseUrlInIndex(string baseUrl)
+    {
+        try
+        {
+            var htmlDoc = new HtmlDocument();
+            var indexHtmlPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "index.html");
+            htmlDoc.Load(indexHtmlPath);
+
+            var baseNode = htmlDoc.DocumentNode.SelectSingleNode("/html/head/base");
+            baseNode.SetAttributeValue("href", baseUrl);
+            htmlDoc.Save(indexHtmlPath);
+        }
+        catch (Exception ex)
+        {
+            if (ex is UnauthorizedAccessException && baseUrl.Equals(Configuration.DefaultBaseUrl) && OsInfo.IsDocker)
+            {
+                // Swallow the exception as the install is non-root and Docker
+                return;
+            }
+            Log.Error(ex, "There was an error setting base url");
+        }
+    }
+
+    private static void OnShutdown()
+    {
+        Console.WriteLine("Server is shutting down. Please allow a few seconds to stop any background jobs...");
+        TaskScheduler.Client.Dispose();
+        System.Threading.Thread.Sleep(1000);
+        Console.WriteLine("You may now close the application window.");
+    }
+
+    private static string GetLocalIpAddress()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0);
+        socket.Connect("8.8.8.8", 65530);
+        if (socket.LocalEndPoint is IPEndPoint endPoint) return endPoint.Address.ToString();
+        throw new LibrariannException("No network adapters with an IPv4 address in the system!");
+    }
+
+}

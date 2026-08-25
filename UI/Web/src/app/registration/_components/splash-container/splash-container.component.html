@@ -1,0 +1,31 @@
+<div class="mx-auto container login text-center"
+    [ngStyle]="{'height': (navService.navbarVisible$ | async) ? 'calc(var(--vh, 1vh) * 100 - var(--nav-offset))' : 'calc(var(--vh, 1vh) * 100)'}">
+
+    <div class="brand-lockup mb-4">
+        <div class="brand-mark" aria-hidden="true">
+            <i class="fa-solid fa-book-open-reader"></i>
+        </div>
+        <div class="brand-copy">
+            <span class="brand-kicker">YOUR READING, ORGANIZED</span>
+            <h1>Librariann</h1>
+            <p>Discover, manage, and enjoy every story in your library.</p>
+        </div>
+    </div>
+    <div class="row align-items-center row-cols-1 login-container justify-content-center">
+        <div class="col col-xl-2 col-lg-3 col-md-3 col-sm-10 col-xs-10 align-self-center card p-3">
+            <span>
+                <div class="logo-container">
+                    <div class="card-title text-center">
+                        <ng-content select="[title]" />
+                    </div>
+                </div>
+            </span>
+
+            <div class="card-text">
+                <ng-content select="[body]" />
+            </div>
+        </div>
+
+    </div>
+
+</div>

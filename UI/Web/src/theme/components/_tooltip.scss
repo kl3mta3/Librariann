@@ -1,0 +1,28 @@
+.tooltip {
+  --bs-tooltip-opacity: 1;
+}
+
+.tooltip-arrow {
+  --bs-tooltip-bg: var(--tooltip-caret-color);
+}
+
+.tooltip-inner {
+  background-color: var(--tooltip-bg-color);
+  border: 0.125rem solid var(--tooltip-outline-color);
+}
+
+/* For Match Series Result custom synonym tooltip */
+.series-synonym-tooltip {
+  .tooltip-inner {
+    max-width: 26rem;
+    text-align: left;
+    padding: 0.5rem 0.625rem;
+
+    ul {
+      columns: 2;
+      column-gap: 1.5rem;
+      max-height: 18rem;
+      overflow-y: auto;
+    }
+  }
+}

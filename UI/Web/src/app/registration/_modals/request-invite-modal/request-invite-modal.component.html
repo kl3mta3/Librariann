@@ -1,0 +1,42 @@
+<ng-container *transloco="let t; prefix: 'request-invite-modal'">
+  <div class="modal-header">
+    <h4 class="modal-title">{{t('title')}}</h4>
+    <button type="button" class="btn-close" [attr.aria-label]="t('close')" (click)="close()"></button>
+  </div>
+
+  <div class="modal-body">
+    @if (!submitted) {
+      <p>{{t('description')}}</p>
+
+      <form [formGroup]="requestForm" (ngSubmit)="submit()">
+        <div class="mb-3">
+          <label for="request-invite-name" class="form-label">{{t('name-label')}}</label>
+          <input class="form-control" type="text" id="request-invite-name" formControlName="name" required>
+        </div>
+        <div class="mb-3">
+          <label for="request-invite-email" class="form-label">{{t('email-label')}}</label>
+          <input class="form-control" type="email" inputmode="email" id="request-invite-email" formControlName="email" required>
+        </div>
+      </form>
+    } @else if (autoAccepted) {
+      <p>{{t('auto-accepted-message')}}</p>
+    } @else {
+      <p>{{t('pending-message')}}</p>
+    }
+  </div>
+
+  <div class="modal-footer">
+    <button type="button" class="btn btn-{{submitted ? 'primary' : 'secondary'}}" (click)="close()">
+      {{submitted ? t('done') : t('cancel')}}
+    </button>
+
+    @if (!submitted) {
+      <button type="button" class="btn btn-primary" (click)="submit()" [disabled]="isSending || !requestForm.valid">
+        @if (isSending) {
+          <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+        }
+        {{t('submit')}}
+      </button>
+    }
+  </div>
+</ng-container>

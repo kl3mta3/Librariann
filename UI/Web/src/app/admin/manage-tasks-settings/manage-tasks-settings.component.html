@@ -1,0 +1,103 @@
+<ng-container *transloco="let t; prefix: 'manage-tasks-settings'">
+  @if (serverSettings) {
+    <div>
+
+      <h4>{{t('title')}}</h4>
+
+      <div class="row g-0 mt-4 mb-4">
+        <app-setting-cron-item [title]="t('library-scan-label')" [subtitle]="t('library-scan-tooltip')"
+          [(value)]="taskScan" />
+      </div>
+      <div class="row g-0 mt-4 mb-4">
+        <app-setting-cron-item [title]="t('library-database-backup-label')" [subtitle]="t('library-database-backup-tooltip')"
+          [(value)]="taskBackup" />
+      </div>
+      <div class="row g-0 mt-4 mb-4">
+        <app-setting-cron-item [title]="t('cleanup-label')" [subtitle]="t('cleanup-tooltip')"
+          [frequencies]="cleanupFrequencies" [(value)]="taskCleanup" />
+      </div>
+      <div class="row g-0 mt-4 mb-4">
+        <app-setting-cron-item [title]="t('cbl-sync-label')" [subtitle]="t('cbl-sync-tooltip')"
+                               [(value)]="taskCblSync" />
+      </div>
+
+
+      <div class="setting-section-break"></div>
+
+      <h4>{{t('adhoc-tasks-title')}}</h4>
+
+      @for(task of adhocTasks; track task.name; let idx = $index) {
+        <div class="mt-4 mb-4">
+          <app-setting-button [subtitle]="t(task.description)">
+            <button class="btn btn-secondary btn-sm mb-2" (click)="runAdhoc(task)">{{t(task.name)}}</button>
+          </app-setting-button>
+        </div>
+      }
+
+      <div class="setting-section-break"></div>
+
+      <h4>{{t('recurring-tasks-title')}}</h4>
+      @let data = (recurringTasks$ | async) ?? [];
+      <app-responsive-table [rows]="data" [trackByFn]="trackBy">
+        <ng-template #tableTemplate>
+          <ngx-datatable
+            class="bootstrap"
+            [rows]="data"
+            [columnMode]="ColumnMode.flex"
+            rowHeight="auto"
+            [footerHeight]="50"
+            [limit]="15"
+          >
+            <ngx-datatable-column prop="title" [sortable]="true" [draggable]="false" [resizeable]="false" [flexGrow]="3">
+              <ng-template let-column="column" ngx-datatable-header-template>
+                {{t('job-title-header')}}
+              </ng-template>
+              <ng-template let-item="row" ngx-datatable-cell-template>
+                {{item.title | titlecase}}
+              </ng-template>
+            </ngx-datatable-column>
+
+
+            <ngx-datatable-column prop="lastExecutionUtc" [sortable]="true" [draggable]="false" [resizeable]="false" [flexGrow]="1">
+              <ng-template let-column="column" ngx-datatable-header-template>
+                {{t('last-executed-header')}}
+              </ng-template>
+              <ng-template let-item="row" ngx-datatable-cell-template>
+                {{item.lastExecutionUtc | utcToLocalTime | defaultValue }}
+              </ng-template>
+            </ngx-datatable-column>
+
+            <ngx-datatable-column prop="cron" [sortable]="false" [draggable]="false" [resizeable]="false" [flexGrow]="1">
+              <ng-template let-column="column" ngx-datatable-header-template>
+                {{t('cron-header')}}
+              </ng-template>
+              <ng-template let-item="row" ngx-datatable-cell-template>
+                {{item.cron}}
+              </ng-template>
+            </ngx-datatable-column>
+          </ngx-datatable>
+        </ng-template>
+
+        <ng-template #cardTemplate let-item let-idx="index">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="card-title mb-3">{{item.title | titlecase}}</h5>
+
+              <div class="row g-2">
+                <div class="col-6">
+                  <div class="text-muted small">{{t('last-executed-header')}}</div>
+                  <div>{{item.lastExecutionUtc | utcToLocalTime | defaultValue}}</div>
+                </div>
+
+                <div class="col-6">
+                  <div class="text-muted small">{{t('cron-header')}}</div>
+                  <div>{{item.cron}}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-template>
+      </app-responsive-table>
+    </div>
+  }
+</ng-container>

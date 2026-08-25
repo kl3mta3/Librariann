@@ -1,0 +1,181 @@
+<ng-container *transloco="let t; prefix: 'manage-acquisition'">
+  <section class="acquisition-header">
+    <div>
+      <p class="eyebrow">{{t('eyebrow')}}</p>
+      <h3>{{t('title')}}</h3>
+      <p>{{t('subtitle')}}</p>
+    </div>
+    <button class="btn btn-primary" (click)="newProvider()">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i> {{t('add-provider')}}
+    </button>
+  </section>
+
+  @if (editing()) {
+    <form class="provider-editor" [formGroup]="form" (ngSubmit)="save()">
+      <div class="editor-heading">
+        <h4>{{form.controls.id.value > 0 ? t('edit-provider') : t('new-provider')}}</h4>
+        <span class="security-note"><i class="fa-solid fa-lock" aria-hidden="true"></i> {{t('encrypted-note')}}</span>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label for="provider-name" class="form-label">{{t('name')}}</label>
+          <input id="provider-name" class="form-control" formControlName="name" autocomplete="off">
+        </div>
+        <div>
+          <label for="provider-category" class="form-label">{{t('category')}}</label>
+          <select id="provider-category" class="form-select" formControlName="category">
+            <option [ngValue]="ProviderCategory.DownloadClient">{{t('download-client')}}</option>
+            <option [ngValue]="ProviderCategory.Indexer">{{t('indexer')}}</option>
+            <option [ngValue]="ProviderCategory.Metadata">{{t('metadata-provider')}}</option>
+          </select>
+        </div>
+        <div>
+          <label for="provider-type" class="form-label">{{t('provider')}}</label>
+          <select id="provider-type" class="form-select" formControlName="providerType" (change)="selectMetadataBaseUrl()">
+            @if (form.controls.category.value === ProviderCategory.DownloadClient) {
+              <option value="utorrent">µTorrent</option>
+              <option value="qbittorrent">qBittorrent</option>
+              <option value="sabnzbd">SABnzbd</option>
+            } @else if (form.controls.category.value === ProviderCategory.Indexer) {
+              <option value="torznab">Torznab</option>
+              <option value="newznab">Newznab</option>
+            } @else {
+              <option value="open-library">Open Library</option>
+              <option value="google-books">Google Books</option>
+              <option value="anilist">AniList</option>
+              <option value="mangadex">MangaDex</option>
+              <option value="comic-vine">Comic Vine</option>
+            }
+          </select>
+        </div>
+        <div>
+          <label for="provider-url" class="form-label">{{t('base-url')}}</label>
+          <input id="provider-url" type="url" class="form-control" formControlName="baseUrl" placeholder="http://192.168.1.20:8080">
+        </div>
+        <div>
+          <label for="provider-username" class="form-label">{{t('username')}}</label>
+          <input id="provider-username" class="form-control" formControlName="username" autocomplete="off" [placeholder]="t('leave-blank')">
+        </div>
+        <div>
+          <label for="provider-password" class="form-label">{{t('password')}}</label>
+          <input id="provider-password" type="password" class="form-control" formControlName="password" autocomplete="new-password" [placeholder]="t('leave-blank')">
+        </div>
+        <div>
+          <label for="provider-api-key" class="form-label">{{t('api-key')}}</label>
+          <input id="provider-api-key" type="password" class="form-control" formControlName="apiKey" autocomplete="new-password" [placeholder]="t('leave-blank')">
+        </div>
+        @if (form.controls.category.value === ProviderCategory.DownloadClient) {
+          <div>
+            <label for="download-category" class="form-label">{{t('download-category')}}</label>
+            <input id="download-category" class="form-control" formControlName="downloadCategory">
+          </div>
+          <div>
+            <label for="remote-path" class="form-label">{{t('remote-path')}}</label>
+            <input id="remote-path" class="form-control" formControlName="remotePath" [placeholder]="t('remote-path-placeholder')">
+          </div>
+          <div>
+            <label for="local-path" class="form-label">{{t('local-path')}}</label>
+            <input id="local-path" class="form-control" formControlName="localPath" [placeholder]="t('local-path-placeholder')">
+          </div>
+        }
+      </div>
+
+      <div class="switches">
+        <label class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" formControlName="isEnabled">
+          <span>{{t('enabled')}}</span>
+        </label>
+        <label class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" formControlName="allowPrivateNetwork">
+          <span>{{t('allow-private-network')}}</span>
+        </label>
+      </div>
+      <p class="private-warning">{{t('private-network-warning')}}</p>
+
+      <div class="editor-actions">
+        <button type="button" class="btn btn-secondary" (click)="cancel()">{{t('cancel')}}</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving() || form.invalid">{{t('save')}}</button>
+      </div>
+    </form>
+  }
+
+  <div class="provider-grid">
+    @for (provider of providers(); track provider.id) {
+      <article class="provider-card">
+        <div class="provider-icon"><i class="fa-solid" [class.fa-download]="provider.category === ProviderCategory.DownloadClient" [class.fa-satellite-dish]="provider.category === ProviderCategory.Indexer" [class.fa-book-open]="provider.category === ProviderCategory.Metadata" aria-hidden="true"></i></div>
+        <div class="provider-copy">
+          <div class="provider-title">
+            <h4>{{provider.name}}</h4>
+            <span class="status" [class.offline]="!provider.isEnabled">{{provider.isEnabled ? t('enabled') : t('disabled')}}</span>
+          </div>
+          <strong>{{providerLabel(provider)}}</strong>
+          <small>{{provider.baseUrl}}</small>
+          <div class="credential-state">
+            @if (provider.hasUsername || provider.hasPassword || provider.hasApiKey) {
+              <span><i class="fa-solid fa-lock" aria-hidden="true"></i> {{t('credentials-protected')}}</span>
+            } @else {
+              <span>{{t('no-credentials')}}</span>
+            }
+            @if (provider.allowPrivateNetwork) {
+              <span><i class="fa-solid fa-house-signal" aria-hidden="true"></i> {{t('private-network')}}</span>
+            }
+          </div>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-icon" [title]="t('test')" (click)="test(provider)" [disabled]="testingId() === provider.id">
+            <i class="fa-solid" [class.fa-spinner]="testingId() === provider.id" [class.fa-spin]="testingId() === provider.id" [class.fa-plug-circle-check]="testingId() !== provider.id" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-icon" [title]="t('edit')" (click)="edit(provider)"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+          <button class="btn btn-icon danger" [title]="t('delete')" (click)="remove(provider)"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+        </div>
+      </article>
+    } @empty {
+      <div class="empty-state">
+        <i class="fa-solid fa-plug-circle-plus" aria-hidden="true"></i>
+        <h4>{{t('empty-title')}}</h4>
+        <p>{{t('empty-body')}}</p>
+      </div>
+    }
+  </div>
+
+  <section class="quality-section">
+    <div class="acquisition-header">
+      <div><p class="eyebrow">{{t('quality-eyebrow')}}</p><h3>{{t('quality-title')}}</h3><p>{{t('quality-subtitle')}}</p></div>
+      <button class="btn btn-primary" type="button" (click)="newQualityProfile()"><i class="fa-solid fa-plus" aria-hidden="true"></i> {{t('add-profile')}}</button>
+    </div>
+
+    @if (editingProfile()) {
+      <form class="provider-editor" [formGroup]="profileForm" (ngSubmit)="saveQualityProfile()">
+        <div class="editor-heading"><h4>{{profileForm.controls.id.value > 0 ? t('edit-profile') : t('new-profile')}}</h4></div>
+        <div class="form-grid">
+          <label><span class="form-label">{{t('profile-name')}}</span><input class="form-control" formControlName="name"></label>
+          <label><span class="form-label">{{t('media-type')}}</span><select class="form-select" formControlName="mediaType"><option [ngValue]="MediaType.Book">Book</option><option [ngValue]="MediaType.Comic">Comic</option><option [ngValue]="MediaType.Manga">Manga</option></select></label>
+          <label><span class="form-label">{{t('language')}}</span><input class="form-control" formControlName="language"></label>
+          <label><span class="form-label">{{t('cutoff')}}</span><select class="form-select" formControlName="cutoffFormat">@for (option of formatOptions(); track option.format) { <option [ngValue]="option.format">{{option.label}}</option> }</select></label>
+          <label><span class="form-label">{{t('minimum-size')}}</span><input class="form-control" type="number" min="0" formControlName="minimumSizeMb"></label>
+          <label><span class="form-label">{{t('maximum-size')}}</span><input class="form-control" type="number" min="0" formControlName="maximumSizeMb"></label>
+        </div>
+        <div class="score-grid" formGroupName="scores">
+          @for (option of formatOptions(); track option.format) {
+            <label><span>{{option.label}}</span><input class="form-control" type="number" min="0" max="100" [formControlName]="option.control"></label>
+          }
+        </div>
+        <div class="switches">
+          <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="upgradeAllowed"><span>{{t('allow-upgrades')}}</span></label>
+          <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="preferRetail"><span>{{t('prefer-retail')}}</span></label>
+        </div>
+        <div class="editor-actions"><button type="button" class="btn btn-secondary" (click)="editingProfile.set(false)">{{t('cancel')}}</button><button class="btn btn-primary" type="submit" [disabled]="profileForm.invalid || savingProfile()">{{t('save')}}</button></div>
+      </form>
+    }
+
+    <div class="profile-grid">
+      @for (profile of profiles(); track profile.id) {
+        <article class="profile-card">
+          <div><span class="media-chip">{{profileMediaLabel(profile.mediaType)}}</span><h4>{{profile.name}}</h4><p>{{profile.language}} · {{profile.upgradeAllowed ? t('upgrades-on') : t('upgrades-off')}}</p></div>
+          <div class="card-actions"><button class="btn btn-icon" type="button" (click)="editQualityProfile(profile)" [title]="t('edit')"><i class="fa-solid fa-pen" aria-hidden="true"></i></button><button class="btn btn-icon danger" type="button" (click)="removeQualityProfile(profile)" [title]="t('delete')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button></div>
+        </article>
+      }
+    </div>
+  </section>
+</ng-container>

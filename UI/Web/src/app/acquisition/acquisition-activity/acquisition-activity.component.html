@@ -1,0 +1,142 @@
+<main class="activity-page" *transloco="let t; prefix: 'acquisition-activity'">
+  <header>
+    <div>
+      <p class="eyebrow">{{t('eyebrow')}}</p>
+      <h1>{{t('title')}}</h1>
+      <p>{{t('subtitle')}}</p>
+    </div>
+    <button class="btn btn-primary" type="button" (click)="refresh()" [disabled]="refreshing()">
+      <i class="fa-solid fa-rotate" [class.fa-spin]="refreshing()" aria-hidden="true"></i> {{t('refresh')}}
+    </button>
+  </header>
+
+  <section class="queue-summary">
+    <div><strong>{{items().length}}</strong><span>{{t('total')}}</span></div>
+    <div><strong>{{activeCount()}}</strong><span>{{t('downloading')}}</span></div>
+    <div><strong>{{importCount()}}</strong><span>{{t('import-queue')}}</span></div>
+    <div><strong>{{failedCount()}}</strong><span>{{t('failed')}}</span></div>
+  </section>
+
+  <nav class="activity-tabs" [attr.aria-label]="t('views-label')">
+    <div class="view-tabs" role="tablist">
+      <button type="button" role="tab" [attr.aria-selected]="selectedView() === View.Queue"
+              [class.active]="selectedView() === View.Queue" (click)="selectView(View.Queue)">
+        {{t('queue-view')}} <span>{{activeCount()}}</span>
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="selectedView() === View.Import"
+              [class.active]="selectedView() === View.Import" (click)="selectView(View.Import)">
+        {{t('import-view')}} <span>{{importCount()}}</span>
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="selectedView() === View.History"
+              [class.active]="selectedView() === View.History" (click)="selectView(View.History)">
+        {{t('history-view')}} <span>{{historyCount()}}</span>
+      </button>
+      <button type="button" role="tab" [attr.aria-selected]="selectedView() === View.Failed"
+              [class.active]="selectedView() === View.Failed" (click)="selectView(View.Failed)">
+        {{t('failed-view')}} <span>{{failedCount()}}</span>
+      </button>
+    </div>
+    <div class="system-links">
+      <a routerLink="/settings" [fragment]="SettingsTabId.Tasks"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> {{t('tasks')}}</a>
+      <a routerLink="/settings" [fragment]="SettingsTabId.System"><i class="fa-solid fa-file-lines" aria-hidden="true"></i> {{t('logs')}}</a>
+    </div>
+  </nav>
+
+  <section class="activity-list" [attr.aria-label]="t('title')">
+    @for (item of filteredItems(); track trackItem(item)) {
+      <article class="queue-item" [class.failed]="item.status === Status.Failed">
+        <div class="format">{{formatLabel(item.format)}}</div>
+        <div class="details">
+          <div class="title-row">
+            <h2>{{item.releaseTitle}}</h2>
+            <div class="queue-actions">
+              <span class="status" [attr.data-status]="item.status">{{statusLabel(item.status)}}</span>
+              @if (item.status === Status.Failed) {
+                <button class="icon-action" type="button" (click)="retry(item)" [disabled]="queueActionId() === item.id" [attr.aria-label]="t('retry')" [title]="t('retry')">
+                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                </button>
+              }
+              @if (item.status !== Status.Removed && item.status !== Status.Importing && !item.externalRemovedAtUtc) {
+                <button class="icon-action danger" type="button" (click)="remove(item)" [disabled]="queueActionId() === item.id" [attr.aria-label]="t('remove')" [title]="t('remove')">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              }
+            </div>
+          </div>
+          <div class="meta">
+            <span>{{item.downloadClientName}}</span>
+            <span>{{item.createdAtUtc | date:'medium'}}</span>
+            @if (item.outputPath) { <span class="path">{{item.outputPath}}</span> }
+          </div>
+          @if (item.status === Status.Downloading || item.status === Status.Queued) {
+            <div class="progress" role="progressbar" [attr.aria-valuenow]="item.progress * 100" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-bar" [style.width.%]="item.progress * 100"></div>
+            </div>
+            <small>{{item.progress * 100 | number:'1.0-0'}}%</small>
+          }
+          @if (item.errorMessage) {
+            <p class="error"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> {{item.errorMessage}}</p>
+          }
+          @if (item.status === Status.ImportPending || item.status === Status.NeedsManualMatch) {
+            <div class="import-actions">
+              <button class="btn btn-sm btn-outline-warning" type="button" (click)="analyze(item)" [disabled]="analyzingId() === item.id">
+                <i class="fa-solid fa-magnifying-glass" [class.fa-beat-fade]="analyzingId() === item.id" aria-hidden="true"></i>
+                {{t('analyze')}}
+              </button>
+              @if (analyses()[item.id]; as analysis) {
+                <span>{{t('candidates', {count: analysis.candidates.length})}}</span>
+              }
+            </div>
+            @if (analyses()[item.id]; as analysis) {
+              @if (analysis.candidates.length > 0) {
+                <div class="import-destination">
+                  <label>
+                    <span>{{t('destination')}}</span>
+                    <select class="form-select form-select-sm" [ngModel]="draft(item.id).folderId" (ngModelChange)="updateDraft(item.id, {folderId: $event})">
+                      <option [ngValue]="0">{{t('choose-library')}}</option>
+                      @for (destination of destinations(); track destination.folderId) {
+                        <option [ngValue]="destination.folderId">{{destination.libraryName}} — {{destination.folderPath}}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>{{t('subdirectory')}}</span>
+                    <input class="form-control form-control-sm" [ngModel]="draft(item.id).destinationSubdirectory" (ngModelChange)="updateDraft(item.id, {destinationSubdirectory: $event})" [placeholder]="t('subdirectory-placeholder')">
+                  </label>
+                  <label>
+                    <span>{{t('file-name')}}</span>
+                    <input class="form-control form-control-sm" [ngModel]="draft(item.id).destinationBaseName" (ngModelChange)="updateDraft(item.id, {destinationBaseName: $event})" [placeholder]="t('file-name-placeholder')">
+                  </label>
+                </div>
+              }
+              <ul class="candidate-list">
+                @for (candidate of analysis.candidates; track candidate.relativePath) {
+                  <li>
+                    <strong>{{formatLabel(candidate.format)}}</strong>
+                    <span>{{candidate.relativePath}}</span>
+                    <small>{{candidate.sizeBytes / 1048576 | number:'1.1-1'}} MB</small>
+                    <button class="btn btn-sm btn-warning" type="button" (click)="commit(item, candidate)"
+                            [disabled]="importingId() === item.id || !canCommit(item.id, candidate)">
+                      {{t('import')}}
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          }
+          @if (item.status === Status.Imported && item.importedPath) {
+            <p class="imported-path"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> {{item.importedPath}}</p>
+          }
+          @if (item.metadataRefreshQueuedAtUtc) {
+            <p class="imported-path"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> {{t('metadata-refresh-queued', {date: (item.metadataRefreshQueuedAtUtc | date:'medium')})}}</p>
+          }
+          @if (item.externalRemovedAtUtc) {
+            <p class="imported-path"><i class="fa-solid fa-broom" aria-hidden="true"></i> {{t('client-cleaned', {date: (item.externalRemovedAtUtc | date:'medium')})}}</p>
+          }
+        </div>
+      </article>
+    } @empty {
+      <div class="empty"><i class="fa-solid fa-inbox" aria-hidden="true"></i><h2>{{t('empty-view-title')}}</h2><p>{{t('empty-view-body')}}</p></div>
+    }
+  </section>
+</main>

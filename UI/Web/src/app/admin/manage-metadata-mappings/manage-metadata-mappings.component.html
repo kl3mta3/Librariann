@@ -1,0 +1,91 @@
+<ng-container *transloco="let t; prefix: 'manage-metadata-settings'" [formGroup]="settingsForm()">
+
+  <app-loading [loading]="isLoading()" />
+  <div ngbAccordion [closeOthers]="false">
+    <div ngbAccordionItem="age-rating-panel" [collapsed]="ageRatingCollapsed()">
+      <h2 class="accordion-header" ngbAccordionHeader>
+        <button ngbAccordionButton class="accordion-button" type="button">
+          {{t('age-rating-mapping-title')}}
+        </button>
+      </h2>
+      <div ngbAccordionCollapse>
+        <div ngbAccordionBody>
+          <ng-template>
+            <p>{{t('age-rating-mapping-description')}}</p>
+
+            <app-age-rating-mapper [form]="settingsForm()" controlName="ageRatingMappings"
+                                   [addLabel]="t('add-age-rating-mapping-label')"
+                                   [removeLabel]="t('remove-age-rating-mapping-label')" />
+          </ng-template>
+        </div>
+      </div>
+    </div>
+
+    <div ngbAccordionItem="field-mapping-panel" [collapsed]="fieldMappingCollapsed()">
+      <h2 class="accordion-header" ngbAccordionHeader>
+        <button ngbAccordionButton class="accordion-button" type="button">
+          {{t('field-mapping-title')}}
+        </button>
+      </h2>
+      <div ngbAccordionCollapse>
+        <div ngbAccordionBody>
+          <ng-template>
+            <p>{{t('field-mapping-description')}}</p>
+            <div formArrayName="fieldMappings">
+              @for (mapping of fieldMappings.controls; track mapping; let i = $index) {
+                <div [formGroupName]="i" class="row mb-2">
+                  <div class="col-md-2">
+                    <select class="form-select" formControlName="sourceType">
+                      <option [ngValue]="MetadataFieldType.Genre">{{t('genre')}}</option>
+                      <option [ngValue]="MetadataFieldType.Tag">{{t('tag')}}</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <input id="field-mapping-{{i}}" type="text" class="form-control" formControlName="sourceValue"
+                           [placeholder]="t('source-genre-tags-placeholder')" />
+                  </div>
+                  <div class="col-md-2">
+                    <select class="form-select" formControlName="destinationType">
+                      <option [ngValue]="MetadataFieldType.Genre">{{t('genre')}}</option>
+                      <option [ngValue]="MetadataFieldType.Tag">{{t('tag')}}</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <input type="text" class="form-control" formControlName="destinationValue"
+                           [placeholder]="t('dest-genre-tags-placeholder')" />
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-check">
+                      <input id="remove-source-tag-{{i}}" type="checkbox" class="form-check-input"
+                             formControlName="excludeFromSource">
+                      <label [for]="'remove-source-tag-' + i" class="form-check-label">
+                        {{t('remove-source-tag-label')}}
+                      </label>
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <button [attr.aria-label]="'field-mapping-' + i" class="btn btn-icon" (click)="removeFieldMappingRow(i)">
+                      <i class="fa fa-trash-alt" aria-hidden="true"></i>
+                      <span class="visually-hidden">{{t('remove-field-mapping-label')}}</span>
+                    </button>
+
+                    @if ($last) {
+                      <button [attr.aria-label]="'field-mapping-header'" class="btn btn-icon" (click)="addFieldMapping()">
+                        <i class="fa fa-plus" aria-hidden="true"></i>
+                        <span class="visually-hidden">{{t('add-field-mapping-label')}}</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <button [attr.aria-label]="'field-mapping-header'" class="btn btn-secondary" (click)="addFieldMapping()">
+                  <i class="fa fa-plus me-1" aria-hidden="true"></i>{{t('add-field-mapping-label')}}
+                </button>
+              }
+            </div>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-container>

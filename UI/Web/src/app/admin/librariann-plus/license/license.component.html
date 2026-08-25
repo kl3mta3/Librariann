@@ -1,0 +1,13 @@
+@let hasLicenseOnFile = licenseService.hasLicenseOnFile();
+
+@if (isChecking()) {
+  <app-loading [loading]="isChecking()" />
+} @else {
+  @if (!hasLicenseOnFile && activeStep() === LibrariannPlusRegistrationStep.Upsell) {
+    <app-librariann-plus-upsell (stepChanged)="activeStep.set($event)" />
+  } @else if (activeStep() === LibrariannPlusRegistrationStep.ConnectProviders) {
+    <app-librariann-plus-connect-providers (done)="activeStep.set(LibrariannPlusRegistrationStep.Upsell)" />
+  } @else {
+    <app-license-dashboard />
+  }
+}

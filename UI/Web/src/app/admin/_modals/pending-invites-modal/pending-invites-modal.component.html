@@ -1,0 +1,60 @@
+<ng-container *transloco="let t; prefix: 'pending-invites-modal'">
+  <div class="modal-header">
+    <h4 class="modal-title">{{t('title')}}</h4>
+    <button type="button" class="btn-close" [attr.aria-label]="t('close')" (click)="close()"></button>
+  </div>
+
+  <div class="modal-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <p class="mb-0">{{t('description')}}</p>
+      <span [ngbTooltip]="isEmailSetup() ? '' : t('email-setup-needed')" placement="left">
+        <button type="button" class="btn btn-primary btn-sm"
+                [disabled]="!isEmailSetup() || isInvitingAll() || requests().length === 0"
+                (click)="inviteAll()">
+          @if (isInvitingAll()) {
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+          }
+          {{t('invite-all')}}
+        </button>
+      </span>
+    </div>
+
+    @if (!isEmailSetup()) {
+      <div class="alert alert-warning py-2" role="alert">{{t('email-setup-needed')}}</div>
+    }
+
+    @if (isLoading()) {
+      <app-loading [loading]="true" />
+    } @else if (requests().length === 0) {
+      <app-empty-state [titleKey]="'no-data'" [i18nPrefix]="'pending-invites-modal'" />
+    } @else {
+      <ul class="list-group">
+        @for (request of requests(); track request.id) {
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-semibold">{{request.email}}</div>
+              <div class="small text-muted">
+                @if (request.name) {
+                  {{request.name}} &middot;
+                }
+                {{t('requested', {time: (request.requestedUtc | utcToLocalTime)})}}
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm"
+                    [disabled]="processingId() === request.id"
+                    (click)="approve(request)">
+              @if (processingId() === request.id) {
+                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+              }
+              {{t('approve')}}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" (click)="close()">{{t('close')}}</button>
+  </div>
+</ng-container>

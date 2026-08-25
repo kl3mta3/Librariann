@@ -1,0 +1,27 @@
+import {Pipe, PipeTransform} from '@angular/core';
+import {ScrobbleProvider} from "../_services/scrobbling.service";
+
+@Pipe({
+  name: 'providerImage',
+  standalone: true
+})
+export class ProviderImagePipe implements PipeTransform {
+
+  transform(value: ScrobbleProvider, large: boolean = false): string {
+    switch (value) {
+      case ScrobbleProvider.Hardcover:
+        return `assets/images/ExternalServices/hardcover${large ? '-lg' : ''}.png`;
+      case ScrobbleProvider.MangaBaka:
+        return `assets/images/ExternalServices/mangabaka${large ? '-lg' : ''}.png`;
+      case ScrobbleProvider.AniList:
+        return `assets/images/ExternalServices/AniList${large ? '-lg' : ''}.png`;
+      case ScrobbleProvider.Mal:
+        return `assets/images/ExternalServices/MAL${large ? '-lg' : ''}.png`;
+      case ScrobbleProvider.Librariann:
+        return `assets/images/logo-${large ? '64' : '32'}.png`;
+      case ScrobbleProvider.Cbr:
+        return `assets/images/ExternalServices/ComicBookRoundup.png`;
+    }
+  }
+
+}

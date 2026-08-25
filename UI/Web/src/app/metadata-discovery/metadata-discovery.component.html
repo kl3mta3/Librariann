@@ -1,0 +1,62 @@
+<main class="metadata-page" *transloco="let t; prefix: 'metadata-discovery'">
+  <header class="hero">
+    <div><p class="eyebrow">{{t('eyebrow')}}</p><h1>{{t('title')}}</h1><p>{{t('subtitle')}}</p></div>
+  </header>
+
+  @if (targetSeries(); as target) {
+    <section class="target-banner">
+      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+      <div><span>{{t('applying-to')}}</span><strong>{{target.name}}</strong></div>
+      <small>{{t('safe-fields')}}</small>
+    </section>
+  }
+  @if (applyMessage()) { <p class="apply-message">{{applyMessage()}}</p> }
+
+  <form class="search-panel" [formGroup]="form" (ngSubmit)="search()">
+    <label><span>{{t('media-type')}}</span><select class="form-select" formControlName="mediaType"><option [ngValue]="MediaType.Book">{{t('book')}}</option><option [ngValue]="MediaType.Comic">{{t('comic')}}</option><option [ngValue]="MediaType.Manga">{{t('manga')}}</option></select></label>
+    <label class="wide"><span>{{t('title-field')}}</span><input class="form-control" formControlName="title" [placeholder]="t('title-placeholder')"></label>
+    <label><span>{{t('author')}}</span><input class="form-control" formControlName="author"></label>
+    <label><span>{{t('isbn')}}</span><input class="form-control" formControlName="isbn" inputmode="numeric"></label>
+    <label><span>{{t('series')}}</span><input class="form-control" formControlName="series"></label>
+    <label><span>{{t('language')}}</span><input class="form-control" formControlName="language" placeholder="en"></label>
+    <label><span>{{t('year')}}</span><input class="form-control" type="number" formControlName="publicationYear" min="0" max="9999"></label>
+    @if (canIncludeAdult()) {
+      <label class="adult-toggle"><input type="checkbox" formControlName="includeAdult"><span><strong>{{t('include-adult')}}</strong><small>{{t('include-adult-help')}}</small></span></label>
+    }
+    <button class="btn btn-warning" type="submit" [disabled]="searching()"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {{t('search')}}</button>
+  </form>
+
+  @for (failure of failures(); track failure.providerKey) {
+    <p class="provider-failure"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> {{failure.providerName}}: {{failure.message}}</p>
+  }
+
+  <section class="results">
+    @for (result of results(); track trackResult(result)) {
+      <article class="result-card">
+        <div class="cover">
+          @if (result.candidate.coverUri) { <img [src]="result.candidate.coverUri" alt="" loading="lazy"> }
+          @else { <i class="fa-solid fa-book-open" aria-hidden="true"></i> }
+        </div>
+        <div class="result-copy">
+          <div class="result-heading"><div><span class="provider">{{result.candidate.providerName}}</span>@if (result.candidate.isAdult) { <span class="adult-badge">{{t('adult')}}</span> }<h2>{{result.candidate.title}}</h2></div><strong class="score">{{result.score}}</strong></div>
+          <p class="byline">{{result.candidate.authors.join(', ')}} @if (result.candidate.publicationYear) { · {{result.candidate.publicationYear}} }</p>
+          @if (result.candidate.series) { <p>{{t('series')}}: {{result.candidate.series}}</p> }
+          <div class="identifiers">@for (isbn of result.candidate.isbns.slice(0, 3); track isbn) { <span>ISBN {{isbn}}</span> }</div>
+          <div class="reasons">@for (reason of result.matchReasons; track reason) { <span><i class="fa-solid fa-check" aria-hidden="true"></i> {{reason}}</span> }</div>
+          <div class="result-actions">
+            @if (targetSeries()) {
+              <button class="btn btn-warning btn-sm" type="button" (click)="apply(result)"
+                      [disabled]="applyingToken() !== null || appliedTokens().has(result.applyToken)">
+                @if (appliedTokens().has(result.applyToken)) { <i class="fa-solid fa-check" aria-hidden="true"></i> {{t('applied')}} }
+                @else { <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> {{t('apply-safe-fields')}} }
+              </button>
+            }
+            @if (result.candidate.detailsUri) { <a [href]="result.candidate.detailsUri" target="_blank" rel="noopener noreferrer">{{t('view-source')}} <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a> }
+          </div>
+        </div>
+      </article>
+    } @empty {
+      @if (searched()) { <div class="empty"><i class="fa-solid fa-books" aria-hidden="true"></i><h2>{{t('empty-title')}}</h2><p>{{t('empty-body')}}</p></div> }
+    }
+  </section>
+</main>

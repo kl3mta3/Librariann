@@ -1,0 +1,20 @@
+<ng-container *transloco="let t; prefix: 'profile-activity'">
+  <div>
+    <app-library-and-time-selector (filterChange)="updateFilter($event)"
+                                   [label]="t('time-filter-title', {username: memberInfo().username | titlecase})"
+                                   [locale]="'profile'" [userId]="memberInfo().id"/>
+  </div>
+
+  <app-reading-history-viewer
+    [currentEntries]="currentEntries()"
+    [isLoading]="isLoading()"
+    [pagination]="pagination()"
+    [currentPage]="currentPage()"
+    [pageSize]="pageSize"
+    (pageChange)="onPageChange($event.page, $event.pageSize, $event.scroll)"
+  />
+
+</ng-container>
+
+
+

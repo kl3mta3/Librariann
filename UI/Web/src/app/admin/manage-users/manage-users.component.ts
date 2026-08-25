@@ -1,0 +1,246 @@
+import {ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal, TrackByFunction} from '@angular/core';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {FormControl, ReactiveFormsModule} from '@angular/forms';
+import {NgbTooltip} from '@ng-bootstrap/ng-bootstrap';
+import {MemberService} from 'src/app/_services/member.service';
+import {Member} from 'src/app/_models/auth/member';
+import {AccountService, Role} from 'src/app/_services/account.service';
+import {ToastrService} from 'ngx-toastr';
+import {ResetPasswordModalComponent} from '../_modals/reset-password-modal/reset-password-modal.component';
+import {ConfirmService} from 'src/app/shared/confirm.service';
+import {MessageHubService} from 'src/app/_services/message-hub.service';
+import {InviteUserComponent} from '../invite-user/invite-user.component';
+import {EditUserComponent} from '../edit-user/edit-user.component';
+import {Router, RouterLink} from '@angular/router';
+import {TagBadgeComponent} from '../../shared/tag-badge/tag-badge.component';
+import {AsyncPipe, NgClass, NgTemplateOutlet, TitleCasePipe} from '@angular/common';
+import {TranslocoModule, TranslocoService} from "@jsverse/transloco";
+import {DefaultDatePipe} from "../../_pipes/default-date.pipe";
+import {DefaultValuePipe} from "../../_pipes/default-value.pipe";
+import {UtcToLocalTimePipe} from "../../_pipes/utc-to-local-time.pipe";
+import {LoadingComponent} from "../../shared/loading/loading.component";
+import {TimeAgoPipe} from "../../_pipes/time-ago.pipe";
+import {SentenceCasePipe} from "../../_pipes/sentence-case.pipe";
+import {UtcToLocalDatePipe} from "../../_pipes/utc-to-locale-date.pipe";
+import {SettingsService} from "../settings.service";
+import {ServerSettings} from "../_models/server-settings";
+import {IdentityProvider} from "../../_models/user/user";
+import {ImageComponent} from "../../shared/image/image.component";
+import {EmptyStateComponent} from "../../shared/_components/empty-state/empty-state.component";
+import {ResponsiveTableComponent} from "../../shared/_components/responsive-table/responsive-table.component";
+import {
+  DataTableColumnCellDirective,
+  DataTableColumnDirective,
+  DataTableColumnHeaderDirective,
+  DatatableComponent
+} from "@siemens/ngx-datatable";
+import {ModalService} from "../../_services/modal.service";
+import {SettingSwitchComponent} from "../../settings/_components/setting-switch/setting-switch.component";
+import {PendingInvitesModalComponent} from "../_modals/pending-invites-modal/pending-invites-modal.component";
+import {UserInviteSettings} from "../../_models/auth/user-invite-settings";
+
+@Component({
+  selector: 'app-manage-users',
+  templateUrl: './manage-users.component.html',
+  styleUrls: ['./manage-users.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [NgbTooltip, TagBadgeComponent, AsyncPipe, TitleCasePipe, TranslocoModule, DefaultDatePipe, NgClass,
+    DefaultValuePipe, UtcToLocalTimePipe, LoadingComponent, TimeAgoPipe, SentenceCasePipe, UtcToLocalDatePipe,
+    ImageComponent, EmptyStateComponent, ResponsiveTableComponent, NgTemplateOutlet, DatatableComponent, DataTableColumnDirective, DataTableColumnCellDirective, DataTableColumnHeaderDirective, RouterLink,
+    ReactiveFormsModule, SettingSwitchComponent]
+})
+export class ManageUsersComponent implements OnInit {
+
+  private readonly translocoService = inject(TranslocoService);
+  private readonly memberService = inject(MemberService);
+  protected readonly accountService = inject(AccountService);
+  private readonly settingsService = inject(SettingsService);
+  private readonly modalService = inject(ModalService);
+  private readonly toastr = inject(ToastrService);
+  private readonly confirmService = inject(ConfirmService);
+  protected readonly messageHub = inject(MessageHubService);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly members = signal<Member[]>([]);
+  settings: ServerSettings | undefined = undefined;
+  protected readonly oidcSyncEnabled = signal(false);
+  loggedInUsername = this.accountService.username;
+  protected readonly isLoading = signal(true);
+  protected readonly libraryCount = signal(0);
+
+  protected readonly inviteSettings = signal<UserInviteSettings | undefined>(undefined);
+  protected readonly isEmailSetup = signal(false);
+  protected readonly pendingInviteCount = signal(0);
+
+  protected readonly notifyAdminsOnly = signal(false);
+  protected readonly notifyMessage = new FormControl('');
+  protected readonly isSendingNotice = signal(false);
+
+  trackByMember: TrackByFunction<Member> = (_, m) =>
+    `${m.username}_${m.lastActiveUtc}_${m.roles.length}`;
+
+
+  ngOnInit(): void {
+    this.loadMembers();
+
+    this.settingsService.getServerSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(settings => {
+      this.settings = settings;
+      this.oidcSyncEnabled.set(settings.oidcConfig.syncUserSettings && settings.oidcConfig.enabled);
+    });
+
+    this.loadInviteSettings();
+  }
+
+  private loadInviteSettings() {
+    this.accountService.getInviteSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(settings => {
+      this.inviteSettings.set(settings);
+    });
+    this.settingsService.isEmailSetup().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(isSetup => {
+      this.isEmailSetup.set(isSetup);
+    });
+    this.accountService.getPendingInvites().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(requests => {
+      this.pendingInviteCount.set(requests.length);
+    });
+  }
+
+
+  loadMembers() {
+    this.isLoading.set(true);
+    this.memberService.getMembers(true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(members => {
+      // Show logged-in user at the top of the list
+      const sorted = [...members].sort((a: Member, b: Member) => {
+        if (a.username === this.loggedInUsername()) return -1;
+        if (b.username === this.loggedInUsername()) return 1;
+
+        const nameA = a.username.toUpperCase();
+        const nameB = b.username.toUpperCase();
+
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        return 0;
+      });
+
+      this.members.set(sorted);
+
+      // Get the admin and get their library count
+      this.libraryCount.set(sorted.filter(m => this.hasAdminRole(m))[0]?.libraries.length ?? 0);
+
+      this.isLoading.set(false);
+    });
+  }
+
+  isMemberYou(member: Member): boolean {
+    return this.loggedInUsername() === member.username;
+  }
+
+  openEditUser(member: Member) {
+    if (!this.settings) return;
+
+    const modalRef = this.modalService.open(EditUserComponent);
+    modalRef.setInput('member', member);
+    modalRef.setInput('settings', this.settings);
+    modalRef.closed.subscribe(() => {
+      this.loadMembers();
+    });
+  }
+
+
+  async deleteUser(member: Member) {
+    if (await this.confirmService.confirm(this.translocoService.translate('toasts.confirm-delete-user'))) {
+      this.memberService.deleteMember(member.username).subscribe(() => {
+        setTimeout(() => {
+          this.loadMembers();
+          this.toastr.success(this.translocoService.translate('toasts.user-deleted', {user: member.username}));
+        }, 30); // SetTimeout because I've noticed this can run superfast and not give enough time for data to flush
+      });
+    }
+  }
+
+  inviteUser() {
+    const modalRef = this.modalService.open(InviteUserComponent);
+    modalRef.closed.subscribe((successful: boolean) => {
+      this.loadMembers();
+    });
+  }
+
+  openDefaultPermissionsModal() {
+    const modalRef = this.modalService.open(InviteUserComponent);
+    modalRef.setInput('isDefaultPermissionsMode', true);
+    modalRef.closed.subscribe(() => this.loadInviteSettings());
+  }
+
+  openPendingInvites() {
+    const modalRef = this.modalService.open(PendingInvitesModalComponent);
+    modalRef.closed.subscribe((changed: boolean) => {
+      if (!changed) return;
+      this.loadMembers();
+      this.loadInviteSettings();
+    });
+  }
+
+  toggleShowRequestInviteLink(checked: boolean) {
+    this.saveInviteSettings({showRequestInviteLink: checked});
+  }
+
+  toggleAutoAccept(checked: boolean) {
+    this.saveInviteSettings({autoAcceptInviteRequests: checked});
+  }
+
+  private saveInviteSettings(patch: Partial<UserInviteSettings>) {
+    const current = this.inviteSettings();
+    if (!current) return;
+
+    const updated = {...current, ...patch};
+    this.inviteSettings.set(updated); // optimistic - the toggle should feel instant
+    this.accountService.updateInviteSettings(updated).subscribe({
+      next: (saved) => this.inviteSettings.set(saved),
+      error: () => this.inviteSettings.set(current) // revert on failure
+    });
+  }
+
+  sendNotice() {
+    const message = this.notifyMessage.value;
+    if (!message) return;
+
+    this.isSendingNotice.set(true);
+    this.accountService.notifyUsers({adminsOnly: this.notifyAdminsOnly(), message}).subscribe({
+      next: (count) => {
+        this.isSendingNotice.set(false);
+        this.notifyMessage.setValue('');
+        this.toastr.success(this.translocoService.translate('manage-users.notify-sent-success', {count}));
+      },
+      error: () => this.isSendingNotice.set(false)
+    });
+  }
+
+  resendEmail(member: Member) {
+    this.accountService.resendConfirmationEmail(member.id).subscribe(async (response) => {
+      if (response.emailSent) {
+        this.toastr.info(this.translocoService.translate('toasts.email-sent', {email: member.username}));
+        return;
+      }
+      await this.confirmService.alert(
+        this.translocoService.translate('toasts.click-email-link') + '<br/> <a href="' + response.emailLink + '" target="_blank" rel="noopener noreferrer">' + response.emailLink + '</a>');
+    });
+  }
+
+  setup(member: Member) {
+    this.accountService.getInviteUrl(member.id, false).subscribe(url => {
+      if (url) {
+        this.router.navigateByUrl(url);
+      }
+    });
+  }
+
+  updatePassword(member: Member) {
+    const modalRef = this.modalService.open(ResetPasswordModalComponent);
+    modalRef.setInput('member', member);
+  }
+
+  hasAdminRole(member: Member) {
+    return member.roles.indexOf(Role.Admin) >= 0;
+  }
+
+  protected readonly IdentityProvider = IdentityProvider;
+}

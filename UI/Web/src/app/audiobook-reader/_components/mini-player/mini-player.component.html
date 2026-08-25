@@ -1,0 +1,41 @@
+<ng-container *transloco="let t; prefix: 'audiobook-mini-player'">
+  @if (visible()) {
+    <div class="mini-player" (click)="open()" role="button" tabindex="0" (keydown.enter)="open()">
+      <div class="progress-track">
+        <div class="progress-fill" [style.width.%]="playback.progressPercent()"></div>
+      </div>
+
+      <div class="mini-player-body">
+        <img class="cover" [src]="playback.coverImageUrl()" [alt]="playback.chapterInfo()?.seriesName" />
+
+        <div class="info">
+          <span class="title">{{playback.chapterInfo()?.seriesName}}</span>
+          @if (playback.chapterInfo()?.chapterTitle) {
+            <span class="subtitle">{{playback.chapterInfo()?.chapterTitle}}</span>
+          }
+        </div>
+
+        <div class="mini-controls">
+          <button class="icon-btn" type="button" (click)="seekRelative($event, -playback.REWIND_SECONDS)" [attr.aria-label]="t('rewind')">
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+          </button>
+          <button class="play-pause-btn" type="button" (click)="togglePlayPause($event)" [attr.aria-label]="playback.isPlaying() ? t('pause') : t('play')">
+            <i class="fa-solid" [class.fa-play]="!playback.isPlaying()" [class.fa-pause]="playback.isPlaying()" aria-hidden="true"></i>
+          </button>
+          <button class="icon-btn" type="button" (click)="seekRelative($event, playback.FORWARD_SECONDS)" [attr.aria-label]="t('forward')">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+          </button>
+          <button class="icon-btn stop-btn" type="button" (click)="stop($event)" [attr.aria-label]="t('stop')">
+            <i class="fa-solid fa-stop" aria-hidden="true"></i>
+          </button>
+        </div>
+
+        <div class="time-label">
+          <span>{{playback.formatTime(playback.currentTime())}}</span>
+          <span>/</span>
+          <span>{{playback.formatTime(playback.duration())}}</span>
+        </div>
+      </div>
+    </div>
+  }
+</ng-container>

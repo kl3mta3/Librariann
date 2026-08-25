@@ -1,0 +1,318 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Hangfire;
+using Librariann.API.Database;
+using Librariann.API.Repositories;
+using Librariann.API.Services;
+using Librariann.API.Services.Plus;
+using Librariann.Common.Extensions;
+using Librariann.Common.Helpers;
+using Librariann.Models.Constants;
+using Librariann.Models.DTOs.Filtering;
+using Librariann.Models.DTOs.Metadata;
+using Librariann.Models.DTOs.Metadata.Browse;
+using Librariann.Models.DTOs.Person;
+using Librariann.Models.DTOs.ReadingLists;
+using Librariann.Models.DTOs.SeriesDetail;
+using Librariann.Models.Entities;
+using Librariann.Models.Entities.Enums;
+using Librariann.Models.Entities.Enums.Audit;
+using Librariann.Server.Extensions;
+using Librariann.Services.Helpers;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Librariann.Server.Controllers;
+
+public class MetadataController(IUnitOfWork unitOfWork, IExternalMetadataService metadataService) : BaseApiController
+{
+
+    /// <summary>
+    /// Fetches genres from the instance
+    /// </summary>
+    /// <param name="libraryIds">String separated libraryIds or null for all genres</param>
+    /// <param name="context">Context from which this API was invoked</param>
+    /// <returns></returns>
+    [HttpGet("genres")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.FiveMinute, VaryByQueryKeys = ["libraryIds", "context"])]
+    public async Task<ActionResult<IList<GenreTagDto>>> GetAllGenres(string? libraryIds, QueryContext context = QueryContext.None)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(int.Parse)
+            .ToList();
+
+        return Ok(await unitOfWork.GenreRepository.GetAllGenreDtosForLibrariesAsync(UserId, ids, context));
+    }
+
+    /// <summary>
+    /// Returns a list of Genres with counts for counts when Genre is on Series/Chapter
+    /// </summary>
+    /// <returns></returns>
+    [HttpPost("genres-with-counts")]
+    public async Task<ActionResult<PagedList<BrowseGenreDto>>> GetBrowseGenres(UserParams? userParams = null)
+    {
+        userParams ??= UserParams.Default;
+
+        var list = await unitOfWork.GenreRepository.GetBrowseableGenre(UserId, userParams);
+        Response.AddPaginationHeader(list.CurrentPage, list.PageSize, list.TotalCount, list.TotalPages);
+
+        return Ok(list);
+    }
+
+    /// <summary>
+    /// Fetches people from the instance by role
+    /// </summary>
+    /// <param name="role">role</param>
+    /// <returns></returns>
+    [HttpGet("people-by-role")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Minute, VaryByQueryKeys = ["role"])]
+    public async Task<ActionResult<IList<PersonDto>>> GetAllPeople(PersonRole? role)
+    {
+        return role.HasValue ?
+            Ok(await unitOfWork.PersonRepository.GetAllPersonDtosByRoleAsync(UserId, role.Value)) :
+            Ok(await unitOfWork.PersonRepository.GetAllPersonDtosAsync(UserId));
+    }
+
+    /// <summary>
+    /// Fetches people from the instance
+    /// </summary>
+    /// <param name="libraryIds">String separated libraryIds or null for all people</param>
+    /// <returns></returns>
+    [HttpGet("people")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Minute, VaryByQueryKeys = ["libraryIds"])]
+    public async Task<ActionResult<IList<PersonDto>>> GetAllPeople(string? libraryIds)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        if (ids is {Count: > 0})
+        {
+            return Ok(await unitOfWork.PersonRepository.GetAllPeopleDtosForLibrariesAsync(UserId, ids));
+        }
+
+        return Ok(await unitOfWork.PersonRepository.GetAllPeopleDtosForLibrariesAsync(UserId));
+    }
+
+    /// <summary>
+    /// Fetches all tags from the instance
+    /// </summary>
+    /// <param name="libraryIds">String separated libraryIds or null for all tags</param>
+    /// <returns></returns>
+    [HttpGet("tags")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Minute, VaryByQueryKeys = ["libraryIds"])]
+    public async Task<ActionResult<IList<TagDto>>> GetAllTags(string? libraryIds)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        if (ids is {Count: > 0})
+        {
+            return Ok(await unitOfWork.TagRepository.GetAllTagDtosForLibrariesAsync(UserId, ids));
+        }
+        return Ok(await unitOfWork.TagRepository.GetAllTagDtosForLibrariesAsync(UserId));
+    }
+
+
+    /// <summary>
+    /// Fetches Reading List Tags from the instance
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet("readinglist-tags")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.FiveMinute)]
+    public async Task<ActionResult<IList<ReadingListTagDto>>> GetAllReadingListTags()
+    {
+        return Ok(await unitOfWork.ReadingListRepository.GetAllReadingListTagDtosAsync(UserId, HttpContext.RequestAborted));
+    }
+
+    /// <summary>
+    /// Returns a list of Tags with counts for counts when Tag is on Series/Chapter
+    /// </summary>
+    /// <returns></returns>
+    [HttpPost("tags-with-counts")]
+    public async Task<ActionResult<PagedList<BrowseTagDto>>> GetBrowseTags(UserParams? userParams = null)
+    {
+        userParams ??= UserParams.Default;
+
+        var list = await unitOfWork.TagRepository.GetBrowseableTag(UserId, userParams);
+        Response.AddPaginationHeader(list.CurrentPage, list.PageSize, list.TotalCount, list.TotalPages);
+
+        return Ok(list);
+    }
+
+    /// <summary>
+    /// Fetches all age ratings from the instance
+    /// </summary>
+    /// <param name="libraryIds">String separated libraryIds or null for all ratings</param>
+    /// <remarks>This API is cached for 1 hour, varying by libraryIds</remarks>
+    /// <returns></returns>
+    [HttpGet("age-ratings")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.FiveMinute, VaryByQueryKeys = ["libraryIds"])]
+    public async Task<ActionResult<IList<AgeRatingDto>>> GetAllAgeRatings(string? libraryIds)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        if (ids is {Count: > 0})
+        {
+            return Ok(await unitOfWork.LibraryRepository.GetAllAgeRatingsDtosForLibrariesAsync(ids));
+        }
+
+        return Ok(Enum.GetValues<AgeRating>().Select(t => new AgeRatingDto()
+        {
+            Title = t.ToDescription(),
+            Value = t
+        }).Where(r => r.Value > AgeRating.NotApplicable));
+    }
+
+    /// <summary>
+    /// Fetches all publication status' from the instance
+    /// </summary>
+    /// <param name="libraryIds">String separated libraryIds or null for all publication status</param>
+    /// <remarks>This API is cached for 1 hour, varying by libraryIds</remarks>
+    /// <returns></returns>
+    [HttpGet("publication-status")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.FiveMinute, VaryByQueryKeys = ["libraryIds"])]
+    public ActionResult<IList<AgeRatingDto>> GetAllPublicationStatus(string? libraryIds)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        if (ids is {Count: > 0})
+        {
+            return Ok(unitOfWork.LibraryRepository.GetAllPublicationStatusesDtosForLibrariesAsync(ids));
+        }
+
+        return Ok(Enum.GetValues<PublicationStatus>().Select(t => new PublicationStatusDto()
+        {
+            Title = t.ToDescription(),
+            Value = t
+        }).OrderBy(t => t.Title));
+    }
+
+    /// <summary>
+    /// Fetches all age languages from the libraries passed (or if none passed, all in the server)
+    /// </summary>
+    /// <remarks>This does not perform RBS for the user if they have Library access due to the non-sensitive nature of languages</remarks>
+    /// <param name="libraryIds">String separated libraryIds or null for all ratings</param>
+    /// <returns></returns>
+    [HttpGet("languages")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.FiveMinute, VaryByQueryKeys = ["libraryIds"])]
+    public async Task<ActionResult<IList<LanguageDto>>> GetAllLanguages(string? libraryIds)
+    {
+        var ids = libraryIds?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        return Ok(await unitOfWork.LibraryRepository.GetAllLanguagesForLibrariesAsync(ids));
+    }
+
+    /// <summary>
+    /// Returns all languages Librariann can accept
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet("all-languages")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Month)]
+    public IEnumerable<LanguageDto> GetAllValidLanguages()
+    {
+        return CultureInfo.GetCultures(CultureTypes.AllCultures).Select(c =>
+            new LanguageDto()
+            {
+                Title = c.DisplayName,
+                IsoCode = c.IetfLanguageTag
+            })
+            .Where(l => !string.IsNullOrEmpty(l.IsoCode))
+            .OrderBy(name => name.Title);
+    }
+
+    /// <summary>
+    /// Returns a list of all BCP47 Languages. <c>IsoCode</c> stores the BCP47 code
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet("all-bcp47-languages")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Month)]
+    public IEnumerable<LanguageDto> GetAllBcp47Languages()
+    {
+        return CultureInfo.GetCultures(CultureTypes.AllCultures)
+            .Select(c =>
+                new LanguageDto()
+                {
+                    Title = c.DisplayName,
+                    IsoCode = c.Name
+                }).
+            Where(l => !string.IsNullOrEmpty(l.IsoCode))
+            .OrderBy(name => name.Title);
+    }
+
+    /// <summary>
+    /// Given a language code returns the display name
+    /// </summary>
+    /// <param name="code"></param>
+    /// <returns></returns>
+    [HttpGet("language-title")]
+    [ResponseCache(CacheProfileName = ResponseCacheProfiles.Month, VaryByQueryKeys = ["code"])]
+    public ActionResult<string?> GetLanguageTitle(string code)
+    {
+        if (string.IsNullOrEmpty(code)) return BadRequest("Code must be provided");
+
+        return CultureInfo.GetCultures(CultureTypes.AllCultures)
+            .Where(l => code.Equals(l.IetfLanguageTag))
+            .Select(c => c.DisplayName)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Fetches the details needed from Librariann+ for Series Detail page
+    /// </summary>
+    /// <remarks>This will hit upstream K+ if the data in local db is 2 weeks old</remarks>
+    /// <param name="seriesId">Series Id</param>
+    /// <param name="libraryType">Library Type</param>
+    /// <returns></returns>
+    [HttpGet("series-detail-plus")]
+    public async Task<ActionResult<SeriesDetailPlusDto>> GetLibrariannPlusSeriesDetailData(int seriesId, LibraryType libraryType)
+    {
+        var userReviews = (await unitOfWork.UserRepository.GetUserRatingDtosForSeriesAsync(seriesId, UserId))
+            .Where(r => !string.IsNullOrEmpty(r.Body))
+            .OrderByDescending(review => review.Username.Equals(Username!) ? 1 : 0)
+            .ToList();
+
+        var ret = await metadataService.TryMatchAndLoadMetadataForSeries(seriesId, libraryType, MetadataFetchTrigger.OnDemand, HttpContext.RequestAborted);
+        if (ret == null)
+        {
+            return Ok(new SeriesDetailPlusDto
+            {
+                Reviews = userReviews,
+            });
+        }
+
+        await PrepareSeriesDetail(userReviews, ret);
+        return Ok(ret);
+    }
+
+    private async Task PrepareSeriesDetail(List<UserReviewDto> userReviews, SeriesDetailPlusDto ret)
+    {
+        var user = await unitOfWork.UserRepository.GetUserByIdAsync(UserId)!;
+
+        userReviews.AddRange(ReviewHelper.SelectSpectrumOfReviews(ret.Reviews.ToList()));
+        ret.Reviews = userReviews;
+
+        if (ret.Recommendations != null && user != null)
+        {
+            // Re-obtain owned series and take into account age restriction and include series progress
+            var seriesIds = ret.Recommendations.OwnedSeries.Select(s => s.Series.Id).ToList();
+            var series = await unitOfWork.SeriesRepository.GetSeriesDtoByIdsAsync(seriesIds, user);
+            var seriesById = series.ToDictionary(s => s.Id);
+
+            ret.Recommendations.OwnedSeries = ret.Recommendations.OwnedSeries
+                .Where(s => seriesById.ContainsKey(s.Series.Id))
+                .Select(s => { s.Series = seriesById[s.Series.Id]; return s; })
+                .ToList();
+
+            // Ensure non-admin's don't see anything about their AgeRating RBS
+            var restriction = new AgeRestriction
+            {
+                AgeRating = user.AgeRestriction,
+                IncludeUnknowns = user.AgeRestrictionIncludeUnknowns
+            };
+            ret.Recommendations.ExternalSeries =
+                RecommendationHelper.FilterExternalRecommendations(ret.Recommendations.ExternalSeries, restriction);
+        }
+
+        if (ret.Recommendations != null && user != null)
+        {
+            ret.Recommendations.OwnedSeries ??= [];
+        }
+    }
+}

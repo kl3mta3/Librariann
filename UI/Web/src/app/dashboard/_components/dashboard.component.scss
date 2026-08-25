@@ -1,0 +1,322 @@
+:host {
+  --librariann-accent: #e5a00d;
+  --librariann-accent-bright: #ffc247;
+}
+
+.main-container {
+  margin-top: 0;
+  padding: 0;
+}
+
+.library-hero {
+  min-height: 22rem;
+  margin: 0 0 1rem;
+  padding: 4.5rem clamp(1.25rem, 5vw, 5rem) 2.5rem;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(8, 10, 14, 0.98) 0%, rgba(8, 10, 14, 0.86) 46%, rgba(8, 10, 14, 0.36) 100%),
+    radial-gradient(circle at 78% 28%, rgba(229, 160, 13, 0.24), transparent 31%),
+    linear-gradient(145deg, #141b25 0%, #090b0f 72%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  width: min(56rem, 100%);
+}
+
+.hero-eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--librariann-accent-bright);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.library-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+.hero-summary {
+  max-width: 45rem;
+  margin: 1rem 0 1.5rem;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  line-height: 1.55;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.hero-action {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 650;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 0.38rem;
+  backdrop-filter: blur(12px);
+  transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease;
+
+  &:hover,
+  &:focus-visible {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+  }
+}
+
+.hero-action-primary {
+  color: #15100a;
+  background: var(--librariann-accent);
+  border-color: var(--librariann-accent);
+
+  &:hover,
+  &:focus-visible {
+    color: #0b0b0b;
+    background: var(--librariann-accent-bright);
+    border-color: var(--librariann-accent-bright);
+  }
+}
+
+.hero-meta {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1.25rem;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.84rem;
+
+  i {
+    margin-right: 0.28rem;
+  }
+
+  a {
+    color: rgba(255, 194, 71, 0.82);
+  }
+}
+
+.hero-glow {
+  position: absolute;
+  z-index: 1;
+  border-radius: 999px;
+  filter: blur(7rem);
+  pointer-events: none;
+}
+
+.hero-glow-primary {
+  width: 25rem;
+  height: 25rem;
+  top: -14rem;
+  right: 5%;
+  background: rgba(229, 160, 13, 0.17);
+}
+
+.hero-glow-secondary {
+  width: 20rem;
+  height: 20rem;
+  right: -10rem;
+  bottom: -12rem;
+  background: rgba(37, 110, 178, 0.15);
+}
+
+.home-streams {
+  padding: 0 0 2rem 0.65rem;
+}
+
+.missing-rail {
+  margin: 0 0 1.5rem;
+}
+
+.missing-rail-heading {
+  padding: 0 1rem 0.65rem 0.25rem;
+
+  h2 {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 1.2rem;
+    font-weight: 650;
+  }
+
+  p {
+    margin: 0.2rem 0 0;
+    color: rgba(255, 255, 255, 0.52);
+    font-size: 0.83rem;
+  }
+}
+
+.missing-rail-track {
+  padding: 0.25rem 1rem 0.85rem 0.25rem;
+  display: grid;
+  grid-auto-columns: clamp(11rem, 16vw, 14rem);
+  grid-auto-flow: column;
+  gap: 0.8rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scroll-snap-type: inline proximity;
+}
+
+.missing-card {
+  aspect-ratio: 2 / 3;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  color: #fff;
+  text-decoration: none;
+  background: #17191d;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.45rem;
+  box-shadow: 0 0.45rem 1.1rem rgba(0, 0, 0, 0.32);
+  scroll-snap-align: start;
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
+
+  img {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    inset: 0;
+    object-fit: cover;
+    opacity: 0.42;
+    filter: saturate(0.72);
+    transform: scale(1.04);
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: #fff;
+    border-color: rgba(229, 160, 13, 0.72);
+    box-shadow: 0 0.8rem 1.6rem rgba(0, 0, 0, 0.48);
+    transform: scale(1.035) translateY(-0.15rem);
+  }
+}
+
+.missing-card-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 7, 10, 0.08) 25%, rgba(5, 7, 10, 0.96) 90%);
+}
+
+.missing-badge {
+  padding: 0.28rem 0.48rem;
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  color: #161007;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--librariann-accent-bright);
+  border-radius: 0.25rem;
+}
+
+.missing-card-copy {
+  padding: 0.85rem;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.18rem;
+
+  strong {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  span,
+  small {
+    color: rgba(255, 255, 255, 0.66);
+    line-height: 1.25;
+  }
+}
+
+.empty-library-state {
+  margin: 1.25rem clamp(1rem, 4vw, 3rem);
+  padding: 1rem 1.25rem;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+
+  p {
+    margin: 0;
+  }
+}
+
+:host ::ng-deep .home-streams {
+  .carousel-container .section-title {
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 1.2rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+
+  app-entity-card {
+    display: block;
+    transition: transform 170ms ease, filter 170ms ease;
+  }
+
+  app-entity-card:hover,
+  app-entity-card:focus-within {
+    z-index: 3;
+    filter: drop-shadow(0 0.75rem 1rem rgba(0, 0, 0, 0.5));
+    transform: scale(1.035) translateY(-0.15rem);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .library-hero {
+    min-height: 28rem;
+    padding-top: 5.25rem;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-action {
+    justify-content: center;
+  }
+
+  .home-streams {
+    padding-left: 0.25rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .hero-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-action,
+  :host ::ng-deep .home-streams app-entity-card,
+  .missing-card {
+    transition: none;
+  }
+}
+:host-context(.librariann-embed) app-side-nav-companion-bar { display: none; }

@@ -1,0 +1,83 @@
+.controls {
+    margin: 0.25rem 0 0.25rem;
+
+    .form-select {
+        option{
+            background-color: var(--input-bg-color);
+        }
+    }
+
+    .form-label {
+        margin: 0;
+    }
+
+    .btn.btn-icon {
+        display: flex;
+        width: 50%;
+        justify-content: center;
+        align-items: center;
+        &.color {
+            display: unset;
+            width: auto;
+
+            .dot {
+                height: 1.5625rem;
+                width: 1.5625rem;
+                border-radius: 50%;
+                margin: 0 auto;
+            }
+        }
+    }
+
+    .form-check.form-switch {
+        width: 50%;
+        display: flex;
+        justify-content: center;
+
+        input {
+            margin-right: 0.25rem;
+        }
+    }
+}
+
+.active {
+    border: 1px solid var(--primary-color);
+}
+
+.form-control-color {
+    width: 4rem;
+    min-width: 4rem;
+    height: 2.75rem;
+    padding: 0.2rem;
+    cursor: pointer;
+}
+
+.custom-color-editor {
+    padding: 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--bs-body-bg) 88%, transparent);
+}
+
+.custom-color-editor.active-editor {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.1rem color-mix(in srgb, var(--primary-color) 28%, transparent);
+}
+
+.custom-color-value,
+.zoom-value {
+    min-width: 3.75rem;
+    font-size: 0.8rem;
+    font-family: monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+.opacity-value {
+    min-width: 3rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+::ng-deep .accordion-body {
+    padding: 0.25rem 1rem 1rem !important;
+}

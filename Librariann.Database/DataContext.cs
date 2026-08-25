@@ -1,0 +1,979 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Librariann.API.Database;
+using Librariann.Database.Extensions;
+using Librariann.Models.DTOs.Acquisition;
+using Librariann.Models.DTOs.Progress;
+using Librariann.Models.Entities;
+using Librariann.Models.Entities.Acquisition;
+using Librariann.Models.Entities.Enums;
+using Librariann.Models.Entities.Enums.ReadingList;
+using Librariann.Models.Entities.Enums.User;
+using Librariann.Models.Entities.Enums.UserPreferences;
+using Librariann.Models.Entities.History;
+using Librariann.Models.Entities.Interfaces;
+using Librariann.Models.Entities.Metadata;
+using Librariann.Models.Entities.MetadataMatching;
+using Librariann.Models.Entities.Person;
+using Librariann.Models.Entities.Progress;
+using Librariann.Models.Entities.ReadingLists;
+using Librariann.Models.Entities.Scrobble;
+using Librariann.Models.Entities.User;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+
+namespace Librariann.Database;
+
+public sealed class DataContext : IdentityDbContext<AppUser, AppRole, int,
+    IdentityUserClaim<int>, AppUserRole, IdentityUserLogin<int>,
+    IdentityRoleClaim<int>, IdentityUserToken<int>>, IDataProtectionKeyContext, IDataContext
+{
+    public DataContext(DbContextOptions options) : base(options)
+    {
+        ChangeTracker.Tracked += OnEntityTracked;
+        ChangeTracker.StateChanged += OnEntityStateChanged;
+    }
+
+    public DbSet<Library> Library { get; set; } = null!;
+    public DbSet<Series> Series { get; set; } = null!;
+    public DbSet<Chapter> Chapter { get; set; } = null!;
+    public DbSet<Volume> Volume { get; set; } = null!;
+    public DbSet<AppUser> AppUser { get; set; } = null!;
+    public DbSet<MangaFile> MangaFile { get; set; } = null!;
+    public DbSet<AppUserProgress> AppUserProgresses { get; set; } = null!;
+    public DbSet<AppUserRating> AppUserRating { get; set; } = null!;
+    public DbSet<ServerSetting> ServerSetting { get; set; } = null!;
+    public DbSet<AppUserPreferences> AppUserPreferences { get; set; } = null!;
+    public DbSet<SeriesMetadata> SeriesMetadata { get; set; } = null!;
+    public DbSet<SeriesMetadataTag> SeriesMetadataTag { get; set; } = null;
+    public DbSet<GenreSeriesMetadata> GenreSeriesMetadata { get; set; } = null;
+    [Obsolete("Use AppUserCollection")]
+    public DbSet<CollectionTag> CollectionTag { get; set; } = null!;
+    public DbSet<AppUserBookmark> AppUserBookmark { get; set; } = null!;
+    public DbSet<ReadingList> ReadingList { get; set; } = null!;
+    public DbSet<ReadingListItem> ReadingListItem { get; set; } = null!;
+    public DbSet<Person> Person { get; set; } = null!;
+    public DbSet<PersonAlias> PersonAlias { get; set; } = null!;
+    public DbSet<Genre> Genre { get; set; } = null!;
+    public DbSet<Tag> Tag { get; set; } = null!;
+    public DbSet<SeriesRelation> SeriesRelation { get; set; } = null!;
+    public DbSet<FolderPath> FolderPath { get; set; } = null!;
+    public DbSet<Device> Device { get; set; } = null!;
+    public DbSet<ServerStatistics> ServerStatistics { get; set; } = null!;
+    public DbSet<MediaError> MediaError { get; set; } = null!;
+    public DbSet<ScrobbleEvent> ScrobbleEvent { get; set; } = null!;
+    public DbSet<ScrobbleError> ScrobbleError { get; set; } = null!;
+    public DbSet<ScrobbleHold> ScrobbleHold { get; set; } = null!;
+    public DbSet<AppUserOnDeckRemoval> AppUserOnDeckRemoval { get; set; } = null!;
+    public DbSet<AppUserTableOfContent> AppUserTableOfContent { get; set; } = null!;
+    public DbSet<AppUserSmartFilter> AppUserSmartFilter { get; set; } = null!;
+    public DbSet<AppUserDashboardStream> AppUserDashboardStream { get; set; } = null!;
+    public DbSet<AppUserSideNavStream> AppUserSideNavStream { get; set; } = null!;
+    public DbSet<AppUserExternalSource> AppUserExternalSource { get; set; } = null!;
+    public DbSet<ExternalReview> ExternalReview { get; set; } = null!;
+    public DbSet<ExternalRating> ExternalRating { get; set; } = null!;
+    public DbSet<ExternalSeriesMetadata> ExternalSeriesMetadata { get; set; } = null!;
+    public DbSet<ExternalRecommendation> ExternalRecommendation { get; set; } = null!;
+    public DbSet<ManualMigrationHistory> ManualMigrationHistory { get; set; } = null!;
+    [Obsolete("Use IsBlacklisted field on Series")]
+    public DbSet<SeriesBlacklist> SeriesBlacklist { get; set; } = null!;
+    public DbSet<AppUserCollection> AppUserCollection { get; set; } = null!;
+    public DbSet<ChapterPeople> ChapterPeople { get; set; } = null!;
+    public DbSet<SeriesMetadataPeople> SeriesMetadataPeople { get; set; } = null!;
+    public DbSet<EmailHistory> EmailHistory { get; set; } = null!;
+    public DbSet<MetadataSettings> MetadataSettings { get; set; } = null!;
+    public DbSet<MetadataFieldMapping> MetadataFieldMapping { get; set; } = null!;
+    public DbSet<AppUserChapterRating> AppUserChapterRating { get; set; } = null!;
+    public DbSet<AppUserReadingProfile> AppUserReadingProfiles { get; set; } = null!;
+    public DbSet<IntegrationProviderConfiguration> IntegrationProviderConfigurations { get; set; } = null!;
+    public DbSet<AcquisitionDownload> AcquisitionDownloads { get; set; } = null!;
+    public DbSet<MetadataFieldProvenance> MetadataFieldProvenances { get; set; } = null!;
+    public DbSet<QualityProfile> QualityProfiles { get; set; } = null!;
+    public DbSet<MonitoringTarget> MonitoringTargets { get; set; } = null!;
+    public DbSet<MonitoringSearchRun> MonitoringSearchRuns { get; set; } = null!;
+    public DbSet<WantedItem> WantedItems { get; set; } = null!;
+    public DbSet<AppUserFollowedPerson> AppUserFollowedPeople { get; set; } = null!;
+    public DbSet<AppUserAnnotation> AppUserAnnotation { get; set; } = null!;
+    public DbSet<EpubFont> EpubFont { get; set; } = null!;
+    public DbSet<AppUserReadingSession> AppUserReadingSession { get; set; } = null!;
+    public DbSet<AppUserReadingSessionActivityData> AppUserReadingSessionActivityData { get; set; } = null!;
+    public DbSet<AppUserReadingHistory> AppUserReadingHistory { get; set; } = null!;
+    public DbSet<ClientDevice> ClientDevice { get; set; } = null!;
+    public DbSet<ClientDeviceHistory> ClientDeviceHistory { get; set; } = null!;
+    public DbSet<AppUserAuthKey> AppUserAuthKey { get; set; } = null!;
+
+    public DbSet<ReadingListTag> ReadingListTag { get; set; } = null!;
+    public DbSet<ReadingListRemapRule> ReadingListRemapRule { get; set; } = null!;
+
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
+
+    public DbSet<LibrariannPlusAuditLog> LibrariannPlusAuditLogs { get; set; } = null!;
+
+    public DbSet<ScrobbleRuleHistory> ScrobbleRuleHistory { get; set; } = null!;
+    public DbSet<AppUserInviteRequest> AppUserInviteRequest { get; set; } = null!;
+
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<SeriesRelation>()
+            .HasOne(pt => pt.Series)
+            .WithMany(p => p.Relations)
+            .HasForeignKey(pt => pt.SeriesId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        builder.Entity<SeriesRelation>()
+            .HasOne(pt => pt.TargetSeries)
+            .WithMany(t => t.RelationOf)
+            .HasForeignKey(pt => pt.TargetSeriesId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+
+        builder.Entity<ExternalSeriesMetadata>()
+            .HasOne(em => em.Series)
+            .WithOne(s => s.ExternalSeriesMetadata)
+            .HasForeignKey<ExternalSeriesMetadata>(em => em.SeriesId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<AppUserCollection>()
+            .Property(b => b.AgeRating)
+            .HasDefaultValue(AgeRating.Unknown);
+
+        #region Reading List
+        builder.Entity<ReadingList>()
+            .Property(b => b.Provider)
+            .HasDefaultValue(ReadingListProvider.None);
+
+        builder.Entity<ReadingListRemapRule>(entity =>
+        {
+            entity.HasOne(r => r.Series)
+                .WithMany()
+                .HasForeignKey(r => r.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.Volume)
+                .WithMany()
+                .HasForeignKey(r => r.VolumeId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(r => r.Chapter)
+                .WithMany()
+                .HasForeignKey(r => r.ChapterId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(r => r.AppUser)
+                .WithMany()
+                .HasForeignKey(r => r.AppUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(r => new { r.NormalizedCblSeriesName, r.IsGlobal, r.AppUserId })
+                .HasDatabaseName("IX_ReadingListRemapRule_NormalizedCblSeriesName_IsGlobal_AppUserId");
+        });
+        #endregion
+
+
+        #region Library
+
+        builder.Entity<Library>()
+            .Property(b => b.AllowScrobbling)
+            .HasDefaultValue(true);
+        builder.Entity<Library>()
+            .Property(b => b.AllowMetadataMatching)
+            .HasDefaultValue(true);
+        builder.Entity<Library>()
+            .Property(b => b.EnableMetadata)
+            .HasDefaultValue(true);
+        builder.Entity<Library>()
+            .Property(l => l.DefaultLanguage)
+            .HasDefaultValue(string.Empty);
+
+        #endregion
+
+        #region Chapter
+        builder.Entity<Chapter>()
+            .Property(b => b.WebLinks)
+            .HasDefaultValue(string.Empty);
+
+
+        builder.Entity<Chapter>()
+            .Property(b => b.ISBN)
+            .HasDefaultValue(string.Empty);
+
+        // Configure the many-to-many relationship for Chapter and Person
+        builder.Entity<ChapterPeople>()
+            .HasKey(cp => new { cp.ChapterId, cp.PersonId, cp.Role });
+
+        builder.Entity<ChapterPeople>()
+            .HasOne(cp => cp.Chapter)
+            .WithMany(c => c.People)
+            .HasForeignKey(cp => cp.ChapterId);
+
+        builder.Entity<ChapterPeople>()
+            .HasOne(cp => cp.Person)
+            .WithMany(p => p.ChapterPeople)
+            .HasForeignKey(cp => cp.PersonId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+
+        builder.Entity<Chapter>()
+            .Property(sm => sm.KPlusOverrides)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<MetadataSettingField>());
+
+        builder.Entity<Volume>()
+            .Property(sm => sm.KPlusOverrides)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<MetadataSettingField>());
+        #endregion
+
+        #region User & Preferences
+        builder.Entity<AppUser>()
+            .HasMany(ur => ur.UserRoles)
+            .WithOne(u => u.User)
+            .HasForeignKey(ur => ur.UserId)
+            .IsRequired();
+
+        builder.Entity<AppRole>()
+            .HasMany(ur => ur.UserRoles)
+            .WithOne(u => u.Role)
+            .HasForeignKey(ur => ur.RoleId)
+            .IsRequired();
+
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.BookThemeName)
+            .HasDefaultValue("Dark");
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.BackgroundColor)
+            .HasDefaultValue("#000000");
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.GlobalPageLayoutMode)
+            .HasDefaultValue(PageLayoutMode.Cards);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.BookReaderWritingStyle)
+            .HasDefaultValue(WritingStyle.Horizontal);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.Locale)
+            .IsRequired(true)
+            .HasDefaultValue("en");
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.AniListScrobblingEnabled)
+            .HasDefaultValue(true);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.WantToReadSync)
+            .HasDefaultValue(true);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.AllowAutomaticWebtoonReaderDetection)
+            .HasDefaultValue(true);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.ColorScapeEnabled)
+            .HasDefaultValue(true);
+        builder.Entity<AppUserPreferences>()
+            .Property(b => b.PromptForRereadsAfter)
+            .HasDefaultValue(30);
+
+        builder.Entity<AppUserPreferences>()
+            .Property(p => p.IgnoredGenreIds)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<int>());
+
+        builder.Entity<AppUserPreferences>()
+            .Property(p => p.FavoriteGenreIds)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<int>());
+
+        builder.Entity<AppUserPreferences>()
+            .Property(a => a.BookReaderHighlightSlots)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<HighlightSlot>());
+
+        builder.Entity<AppUserPreferences>()
+            .Property(p => p.CustomKeyBinds)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new Dictionary<KeyBindTarget, IList<KeyBind>>());
+
+        builder.Entity<AppUser>()
+            .Property(user => user.IdentityProvider)
+            .HasDefaultValue(IdentityProvider.Librariann);
+
+        builder.Entity<AppUserPreferences>()
+            .Property(a => a.SocialPreferences)
+            .HasJsonConversion(new AppUserSocialPreferences())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new AppUserSocialPreferences());
+
+        builder.Entity<AppUserPreferences>()
+            .Property(a => a.OpdsPreferences)
+            .HasJsonConversion(new AppUserOpdsPreferences())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new AppUserOpdsPreferences());
+
+        builder.Entity<AppUser>()
+            .Property(u => u.ScrobbleProviders)
+            .HasJsonConversion(new Dictionary<ScrobbleProvider, AppUserScrobbleProvider>())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new Dictionary<ScrobbleProvider, AppUserScrobbleProvider>());
+
+        #endregion
+
+        #region IntegrationProviderConfiguration
+        builder.Entity<IntegrationProviderConfiguration>()
+            .HasIndex(provider => provider.Name)
+            .IsUnique();
+        builder.Entity<IntegrationProviderConfiguration>()
+            .HasIndex(provider => provider.CredentialKey)
+            .IsUnique();
+        builder.Entity<IntegrationProviderConfiguration>()
+            .PrimitiveCollection(provider => provider.Tags)
+            .HasDefaultValue(new List<string>());
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.DownloadCategory)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasDefaultValue("librariann");
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.Name)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.ProviderType)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.BaseUrl)
+            .IsRequired()
+            .HasMaxLength(2048);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.ProtectedUsername)
+            .IsRequired()
+            .HasMaxLength(4096);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.ProtectedPassword)
+            .IsRequired()
+            .HasMaxLength(8192);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.ProtectedApiKey)
+            .IsRequired()
+            .HasMaxLength(8192);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.RemotePath)
+            .IsRequired()
+            .HasMaxLength(2048);
+        builder.Entity<IntegrationProviderConfiguration>()
+            .Property(provider => provider.LocalPath)
+            .IsRequired()
+            .HasMaxLength(2048);
+        #endregion
+
+        #region AcquisitionDownload
+        builder.Entity<AcquisitionDownload>()
+            .HasIndex(download => new {download.IntegrationProviderConfigurationId, download.ExternalId});
+        builder.Entity<AcquisitionDownload>()
+            .HasIndex(download => download.Status);
+        builder.Entity<AcquisitionDownload>()
+            .HasIndex(download => new {download.MonitoringTargetId, download.WantedItemId, download.Status});
+        builder.Entity<AcquisitionDownload>()
+            .HasIndex(download => new {download.ImportedSeriesId, download.Status});
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.Status)
+            .HasDefaultValue(AcquisitionDownloadStatus.Queued);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.DownloadClientName)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.ExternalId)
+            .IsRequired()
+            .HasMaxLength(512);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.ReleaseTitle)
+            .IsRequired()
+            .HasMaxLength(512);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.OutputPath)
+            .IsRequired()
+            .HasMaxLength(4096);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.ImportedPath)
+            .IsRequired()
+            .HasMaxLength(4096);
+        builder.Entity<AcquisitionDownload>()
+            .Property(download => download.ErrorMessage)
+            .IsRequired()
+            .HasMaxLength(1024);
+        #endregion
+
+        #region Monitoring
+        builder.Entity<MonitoringTarget>()
+            .HasIndex(target => new {target.LibrarySeriesId, target.Kind})
+            .IsUnique()
+            .HasFilter("\"LibrarySeriesId\" IS NOT NULL");
+        builder.Entity<MonitoringTarget>()
+            .HasIndex(target => new {target.ExternalProviderKey, target.ExternalItemId, target.Kind})
+            .IsUnique()
+            .HasFilter("\"ExternalProviderKey\" <> '' AND \"ExternalItemId\" <> ''");
+        builder.Entity<MonitoringTarget>().Property(target => target.Title).IsRequired().HasMaxLength(512);
+        builder.Entity<MonitoringTarget>().Property(target => target.Author).IsRequired().HasMaxLength(256);
+        builder.Entity<MonitoringTarget>().Property(target => target.Isbn).IsRequired().HasMaxLength(32);
+        builder.Entity<MonitoringTarget>().Property(target => target.Language).IsRequired().HasMaxLength(32);
+        builder.Entity<MonitoringTarget>().Property(target => target.ExternalProviderKey).IsRequired().HasMaxLength(100);
+        builder.Entity<MonitoringTarget>().Property(target => target.ExternalItemId).IsRequired().HasMaxLength(512);
+        builder.Entity<MonitoringTarget>().Property(target => target.LastSearchSummary).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringTarget>().Property(target => target.CatalogSummary).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringTarget>().Property(target => target.MinimumAutomaticGrabScore).HasDefaultValue(90);
+        builder.Entity<MonitoringTarget>()
+            .HasOne<IntegrationProviderConfiguration>()
+            .WithMany()
+            .HasForeignKey(target => target.DownloadClientId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.Entity<MonitoringTarget>()
+            .HasOne<QualityProfile>()
+            .WithMany()
+            .HasForeignKey(target => target.QualityProfileId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<MonitoringTarget>()
+            .HasOne<Series>()
+            .WithMany()
+            .HasForeignKey(target => target.LibrarySeriesId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Entity<MonitoringSearchRun>()
+            .HasIndex(run => new {run.MonitoringTargetId, run.StartedAtUtc});
+        builder.Entity<MonitoringSearchRun>().Property(run => run.Query).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringSearchRun>().Property(run => run.BestReleaseTitle).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringSearchRun>().Property(run => run.Summary).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringSearchRun>().Property(run => run.GrabSummary).IsRequired().HasMaxLength(1024);
+        builder.Entity<MonitoringSearchRun>().Property(run => run.DecisionSnapshotJson).IsRequired();
+        builder.Entity<MonitoringSearchRun>()
+            .HasOne<MonitoringTarget>()
+            .WithMany()
+            .HasForeignKey(run => run.MonitoringTargetId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<MonitoringSearchRun>()
+            .HasOne<WantedItem>()
+            .WithMany()
+            .HasForeignKey(run => run.WantedItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Entity<WantedItem>()
+            .HasIndex(item => new {item.MonitoringTargetId, item.ProviderKey, item.ExternalItemId})
+            .IsUnique();
+        builder.Entity<WantedItem>().Property(item => item.ProviderKey).IsRequired().HasMaxLength(100);
+        builder.Entity<WantedItem>().Property(item => item.ExternalItemId).IsRequired().HasMaxLength(512);
+        builder.Entity<WantedItem>().Property(item => item.Title).IsRequired().HasMaxLength(512);
+        builder.Entity<WantedItem>().Property(item => item.Author).IsRequired().HasMaxLength(256);
+        builder.Entity<WantedItem>().Property(item => item.Series).IsRequired().HasMaxLength(512);
+        builder.Entity<WantedItem>().Property(item => item.Sequence).IsRequired().HasMaxLength(64);
+        builder.Entity<WantedItem>().Property(item => item.LastSearchSummary).IsRequired().HasMaxLength(1024);
+        builder.Entity<WantedItem>()
+            .HasIndex(item => new {item.MonitoringTargetId, item.Status, item.NextSearchAtUtc});
+        builder.Entity<WantedItem>()
+            .HasOne<MonitoringTarget>()
+            .WithMany()
+            .HasForeignKey(item => item.MonitoringTargetId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<WantedItem>()
+            .HasOne<Series>()
+            .WithMany()
+            .HasForeignKey(item => item.LibrarySeriesId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.Entity<AcquisitionDownload>()
+            .HasOne<MonitoringTarget>()
+            .WithMany()
+            .HasForeignKey(download => download.MonitoringTargetId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.Entity<AcquisitionDownload>()
+            .HasOne<WantedItem>()
+            .WithMany()
+            .HasForeignKey(download => download.WantedItemId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.Entity<AcquisitionDownload>()
+            .HasOne<Series>()
+            .WithMany()
+            .HasForeignKey(download => download.ImportedSeriesId)
+            .OnDelete(DeleteBehavior.SetNull);
+        #endregion
+
+        #region FollowedPeople
+        builder.Entity<AppUserFollowedPerson>()
+            .HasKey(follow => new {follow.AppUserId, follow.PersonId});
+        builder.Entity<AppUserFollowedPerson>()
+            .HasIndex(follow => new {follow.AppUserId, follow.CreatedAtUtc});
+        builder.Entity<AppUserFollowedPerson>()
+            .HasOne<AppUser>()
+            .WithMany()
+            .HasForeignKey(follow => follow.AppUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<AppUserFollowedPerson>()
+            .HasOne<Person>()
+            .WithMany()
+            .HasForeignKey(follow => follow.PersonId)
+            .OnDelete(DeleteBehavior.Cascade);
+        #endregion
+
+        #region MetadataFieldProvenance
+        builder.Entity<MetadataFieldProvenance>()
+            .HasIndex(item => new {item.EntityType, item.EntityId, item.Field})
+            .IsUnique();
+        builder.Entity<MetadataFieldProvenance>()
+            .Property(item => item.ProviderKey)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Entity<MetadataFieldProvenance>()
+            .Property(item => item.ProviderItemId)
+            .IsRequired()
+            .HasMaxLength(512);
+        builder.Entity<MetadataFieldProvenance>()
+            .Property(item => item.ValueHash)
+            .IsRequired()
+            .HasMaxLength(64);
+        #endregion
+
+        #region QualityProfile
+        builder.Entity<QualityProfile>()
+            .HasIndex(profile => profile.Name)
+            .IsUnique();
+        builder.Entity<QualityProfile>()
+            .Property(profile => profile.Name)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Entity<QualityProfile>()
+            .Property(profile => profile.Language)
+            .IsRequired()
+            .HasMaxLength(32);
+        builder.Entity<QualityProfile>()
+            .Property(profile => profile.FormatScores)
+            .HasJsonConversion(new Dictionary<AcquisitionMediaFormat, int>());
+        #endregion
+
+        #region AppUserReadingProfile
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.BookThemeName)
+            .HasDefaultValue("Dark");
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.BookReaderBackgroundColor)
+            .HasDefaultValue("#F1E4D5");
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.BookReaderBackgroundOpacity)
+            .HasDefaultValue(100);
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.BackgroundColor)
+            .HasDefaultValue("#000000");
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.BookReaderWritingStyle)
+            .HasDefaultValue(WritingStyle.Horizontal);
+        builder.Entity<AppUserReadingProfile>()
+            .Property(b => b.AllowAutomaticWebtoonReaderDetection)
+            .HasDefaultValue(true);
+
+        builder.Entity<AppUserReadingProfile>()
+            .PrimitiveCollection(p => p.LibraryIds)
+            .HasDefaultValue(new List<int>());
+        builder.Entity<AppUserReadingProfile>()
+            .PrimitiveCollection(p => p.SeriesIds)
+            .HasDefaultValue(new List<int>());
+        builder.Entity<AppUserReadingProfile>()
+            .PrimitiveCollection(p => p.DeviceIds)
+            .HasDefaultValue(new List<int>());
+        #endregion
+
+        #region AppUser Streams
+
+        builder.Entity<AppUserDashboardStream>()
+            .Property(b => b.StreamType)
+            .HasDefaultValue(DashboardStreamType.SmartFilter);
+        builder.Entity<AppUserDashboardStream>()
+            .HasIndex(e => e.Visible)
+            .IsUnique(false);
+
+        builder.Entity<AppUserSideNavStream>()
+            .Property(b => b.StreamType)
+            .HasDefaultValue(SideNavStreamType.SmartFilter);
+        builder.Entity<AppUserSideNavStream>()
+            .HasIndex(e => e.Visible)
+            .IsUnique(false);
+
+        #endregion
+
+        #region Annoations
+
+        builder.Entity<AppUserAnnotation>()
+            .PrimitiveCollection(a => a.Likes)
+            .HasDefaultValue(new List<int>());
+
+        #endregion
+
+        #region Reading Sessions & History
+        builder.Entity<AppUserReadingSession>()
+            .Property(b => b.IsActive)
+            .HasDefaultValue(true);
+
+        builder.Entity<AppUserReadingSession>()
+            .HasMany(x => x.ActivityData)
+            .WithOne(a => a.ReadingSession)
+            .HasForeignKey(a => a.AppUserReadingSessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<AppUserReadingSessionActivityData>(e
+            => e.ComplexProperty(d=> d.ClientInfo, b => b.ToJson()));
+
+        builder.Entity<AppUserReadingHistory>()
+            .Property(sm => sm.Data)
+            .HasJsonConversion(new DailyReadingDataDto())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new DailyReadingDataDto());
+        builder.Entity<AppUserReadingHistory>()
+            .Property(sm => sm.ClientInfoUsed)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<ClientInfoData>());
+
+        builder.Entity<AppUserReadingSession>(entity =>
+        {
+            // Covers: active session lookup, all sessions by user, and cleanup query
+            entity.HasIndex(s => new { s.AppUserId, s.IsActive })
+                .HasDatabaseName("IX_AppUserReadingSession_AppUserId_IsActive");
+
+            // Cleanup query: finding expired active sessions
+            entity.HasIndex(s => new { s.IsActive, s.LastModifiedUtc })
+                .HasDatabaseName("IX_AppUserReadingSession_IsActive_LastModifiedUtc");
+        });
+
+        builder.Entity<AppUserReadingHistory>(entity =>
+        {
+            entity.HasIndex(s => new { s.AppUserId, s.DateUtc})
+                .HasDatabaseName("IX_AppUserReadingHistory_AppUserId_DateUtc");
+        });
+
+        #endregion
+
+        #region Client Device
+        builder.Entity<ClientDevice>()
+            .Property(sm => sm.CurrentClientInfo)
+            .HasJsonConversion(new ClientInfoData())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new ClientInfoData());
+
+        builder.Entity<ClientDeviceHistory>()
+            .Property(sm => sm.ClientInfo)
+            .HasJsonConversion(new ClientInfoData())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new ClientInfoData());
+        #endregion
+
+        #region SeriesMetadata
+
+        builder.Entity<SeriesMetadata>()
+            .HasMany(sm => sm.Tags)
+            .WithMany(t => t.SeriesMetadatas)
+            .UsingEntity<SeriesMetadataTag>();
+
+        builder.Entity<SeriesMetadata>()
+            .HasMany(sm => sm.Genres)
+            .WithMany(t => t.SeriesMetadatas)
+            .UsingEntity<GenreSeriesMetadata>();
+
+        builder.Entity<SeriesMetadata>()
+            .Property(sm => sm.KPlusOverrides)
+            .HasJsonConversion([])
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new List<MetadataSettingField>());
+
+        builder.Entity<SeriesMetadataPeople>()
+            .HasKey(smp => new { smp.SeriesMetadataId, smp.PersonId, smp.Role });
+
+        builder.Entity<SeriesMetadataPeople>()
+            .HasOne(smp => smp.SeriesMetadata)
+            .WithMany(sm => sm.People)
+            .HasForeignKey(smp => smp.SeriesMetadataId);
+
+        builder.Entity<SeriesMetadataPeople>()
+            .HasOne(smp => smp.Person)
+            .WithMany(p => p.SeriesMetadataPeople)
+            .HasForeignKey(smp => smp.PersonId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<SeriesMetadataPeople>()
+            .Property(b => b.OrderWeight)
+            .HasDefaultValue(0);
+
+        builder.Entity<Person>()
+            .HasIndex(person => person.OpenLibraryId)
+            .IsUnique();
+
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.AgeRatingMappings)
+            .HasJsonConversion([]);
+
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.ExternalAgeRatingMappings)
+            .HasJsonConversion([]);
+
+        builder.Entity<SeriesMetadata>()
+            .Property(b => b.WebLinks)
+            .HasDefaultValue(string.Empty);
+
+        // Ensure blacklist is stored as a JSON array
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.Blacklist)
+            .HasJsonConversion([]);
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.Whitelist)
+            .HasJsonConversion([]);
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.Overrides)
+            .HasJsonConversion([]);
+
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.LibraryLanguageTitleOverrides)
+            .HasJsonConversion(new Dictionary<int, SeriesNameLanguage>())
+            .HasColumnType("TEXT")
+            .HasDefaultValue(new Dictionary<int, SeriesNameLanguage>());
+
+        // Defaults must match the property initializers on MetadataSettings, else existing installs (which take
+        // the column default) and fresh installs (which take the initializer) would ship different behaviour
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.GlobalNameLanguages)
+            .HasDefaultValue("en");
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.GlobalLocalizedNameLanguages)
+            .HasDefaultValue("ja-Latn");
+
+        // Configure one-to-many relationship
+        builder.Entity<MetadataSettings>()
+            .HasMany(x => x.FieldMappings)
+            .WithOne(x => x.MetadataSettings)
+            .HasForeignKey(x => x.MetadataSettingsId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.Enabled)
+            .HasDefaultValue(true);
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.EnableCoverImage)
+            .HasDefaultValue(true);
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.EnableAgeRating)
+            .HasDefaultValue(true);
+
+        #endregion
+
+        #region AppUserAuthKey
+        builder.Entity<AppUserAuthKey>()
+            .Property(a => a.Provider)
+            .HasDefaultValue(AuthKeyProvider.User);
+        #endregion
+
+        #region AppUserBookmark
+        builder.Entity<AppUserBookmark>(entity =>
+        {
+            entity.HasOne(b => b.Series)
+                .WithMany()
+                .HasForeignKey(b => b.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.Volume)
+                .WithMany()
+                .HasForeignKey(b => b.VolumeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.Chapter)
+                .WithMany()
+                .HasForeignKey(b => b.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(b => b.AppUser)
+                .WithMany(u => u.Bookmarks)
+                .HasForeignKey(b => b.AppUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        #endregion
+
+        #region Search Indexes
+        // Series indexes for search
+        builder.Entity<Series>(entity =>
+        {
+            entity.HasIndex(s => new { s.LibraryId, s.Format, s.NormalizedName })
+                .HasDatabaseName("IX_Series_LibraryId_Format_NormalizedName");
+
+            entity.HasIndex(s => new { s.LibraryId, s.Format, s.NormalizedLocalizedName })
+                .HasDatabaseName("IX_Series_LibraryId_Format_NormalizedLocalizedName");
+
+            entity.HasIndex(s => new { s.LibraryId, s.Format, s.NormalizedOriginalName })
+                .HasDatabaseName("IX_Series_LibraryId_Format_NormalizedOriginalName");
+
+            entity.HasIndex(s => s.LibraryId)
+                .HasDatabaseName("IX_Series_LibraryId");
+        });
+
+        builder.Entity<SeriesMetadata>(entity =>
+        {
+            entity.HasIndex(sm => sm.AgeRating)
+                .HasDatabaseName("IX_SeriesMetadata_AgeRating");
+
+            // This composite helps age-restricted queries
+            entity.HasIndex(sm => new { sm.SeriesId, sm.AgeRating })
+                .HasDatabaseName("IX_SeriesMetadata_SeriesId_AgeRating");
+        });
+
+        // Chapter indexes
+        builder.Entity<Chapter>(entity =>
+        {
+            entity.HasIndex(c => c.TitleName)
+                .HasDatabaseName("IX_Chapter_TitleName");
+        });
+
+        // MangaFile indexes (admin search)
+        builder.Entity<MangaFile>(entity =>
+        {
+            entity.HasIndex(f => f.FilePath)
+                .HasDatabaseName("IX_MangaFile_FilePath");
+        });
+
+        // AppUserBookmark composite for user lookups
+        builder.Entity<AppUserBookmark>(entity =>
+        {
+            entity.HasIndex(b => new { b.AppUserId, b.SeriesId })
+                .HasDatabaseName("IX_AppUserBookmark_AppUserId_SeriesId");
+        });
+
+        // Cover the date range + library filter on ActivityData
+        builder.Entity<AppUserReadingSessionActivityData>()
+            .HasIndex(a => new { a.StartTimeUtc, a.LibraryId })
+            .HasDatabaseName("IX_ActivityData_StartTimeUtc_LibraryId");
+
+        builder.Entity<LibrariannPlusAuditLog>(entity =>
+        {
+            entity.HasIndex(e => new { e.Category, e.CreatedUtc })
+                .HasDatabaseName("IX_LibrariannPlusAuditLog_Category_CreatedUtc");
+            entity.HasIndex(e => new { e.SeriesId, e.CreatedUtc })
+                .HasDatabaseName("IX_LibrariannPlusAuditLog_SeriesId_CreatedUtc");
+            entity.HasIndex(e => new { e.SubjectType, e.SubjectId })
+                .HasDatabaseName("IX_LibrariannPlusAuditLog_SubjectType_SubjectId");
+            entity.HasIndex(e => e.CreatedUtc)
+                .HasDatabaseName("IX_LibrariannPlusAuditLog_CreatedUtc");
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("IX_LibrariannPlusAuditLog_UserId");
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.ScrobbleError)
+                .WithMany()
+                .HasForeignKey(e => e.ScrobbleErrorId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<ScrobbleRuleHistory>(entity =>
+        {
+            // One delivered row per (user, provider, rule, series, chapter). ChapterId is null for series-based providers.
+            entity.HasIndex(e => new { e.AppUserId, e.Provider, e.RuleKind, e.SeriesId, e.ChapterId })
+                .IsUnique()
+                .HasDatabaseName("IX_ScrobbleRuleHistory_User_Provider_Rule_Series_Chapter");
+            // Reset/purge lookups by user + series
+            entity.HasIndex(e => new { e.AppUserId, e.SeriesId })
+                .HasDatabaseName("IX_ScrobbleRuleHistory_AppUserId_SeriesId");
+
+            entity.HasOne(e => e.AppUser)
+                .WithMany()
+                .HasForeignKey(e => e.AppUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Series)
+                .WithMany()
+                .HasForeignKey(e => e.SeriesId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Chapter)
+                .WithMany()
+                .HasForeignKey(e => e.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The event is reaped ~7 days after processing while this row must outlive it.
+            entity.HasOne(e => e.ScrobbleEvent)
+                .WithMany()
+                .HasForeignKey(e => e.ScrobbleEventId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        #endregion
+    }
+
+    #nullable enable
+    private static void OnEntityTracked(object? sender, EntityTrackedEventArgs e)
+    {
+        if (e.FromQuery || e.Entry.State != EntityState.Added || e.Entry.Entity is not IEntityDate entity) return;
+
+        entity.LastModified = DateTime.Now;
+        entity.LastModifiedUtc = DateTime.UtcNow;
+
+        // This allows for mocking
+        if (entity.Created == DateTime.MinValue)
+        {
+            entity.Created = DateTime.Now;
+            entity.CreatedUtc = DateTime.UtcNow;
+        }
+    }
+
+    private static void OnEntityStateChanged(object? sender, EntityStateChangedEventArgs e)
+    {
+        if (e.NewState != EntityState.Modified || e.Entry.Entity is not IEntityDate entity) return;
+        entity.LastModified = DateTime.Now;
+        entity.LastModifiedUtc = DateTime.UtcNow;
+    }
+    #nullable disable
+
+    private void OnSaveChanges()
+    {
+        foreach (var saveEntity in ChangeTracker.Entries()
+                     .Where(e => e.State == EntityState.Modified)
+                     .Select(entry => entry.Entity)
+                     .OfType<IHasConcurrencyToken>())
+        {
+            saveEntity.OnSavingChanges();
+        }
+    }
+
+    #region SaveChanges overrides
+
+    public override int SaveChanges()
+    {
+        OnSaveChanges();
+
+        return base.SaveChanges();
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        OnSaveChanges();
+
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default(CancellationToken))
+    {
+        OnSaveChanges();
+
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
+    {
+        OnSaveChanges();
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    #endregion
+}

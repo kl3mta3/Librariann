@@ -1,0 +1,11 @@
+<ng-container *transloco="let t; prefix: 'pending-invites-nav-icon'">
+  <div class="nav-item">
+    <a routerLink="/settings" [fragment]="SettingsTabId.Users" class="dark-exempt btn btn-icon position-relative" [title]="t('title-alt')">
+      <i class="fa fa-user nav" aria-hidden="true"></i>
+      @if (pendingCount() > 0) {
+        <span class="pending-badge" [attr.aria-label]="t('pending-count-alt', {count: pendingCount()})"></span>
+      }
+      <span class="visually-hidden">{{t('title-alt')}}</span>
+    </a>
+  </div>
+</ng-container>

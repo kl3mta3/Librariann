@@ -1,0 +1,22 @@
+.offcanvas {
+    color: var(--drawer-text-color);
+    background-color: var(--drawer-bg-color);
+    // Bootstrap's defaults (offcanvas: 1045, offcanvas-backdrop: 1040) sit below the book reader's own
+    // full-viewport overlay (:host z-index: 2000 in foliate-reader-poc.component.ts) - any drawer opened while
+    // reading (settings, table of contents, annotations) would otherwise open and function correctly but render
+    // invisibly underneath the reader. Bumped comfortably above it so drawers always stay on top regardless of
+    // what full-viewport overlay they were opened from.
+    z-index: 2100;
+}
+
+.offcanvas-backdrop {
+    z-index: 2090;
+}
+
+.offcanvas-end, .offcanvas-start, .offcanvas-top {
+    top: var(--nav-offset);
+}
+
+.offcanvas-bottom {
+    height: 40vh !important;
+}

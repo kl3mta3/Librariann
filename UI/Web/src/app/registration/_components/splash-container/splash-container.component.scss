@@ -1,0 +1,135 @@
+::ng-deep body {
+    scrollbar-gutter: stable;
+}
+
+.login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    height: calc(var(--vh, 1vh) * 100 - 3.5625rem);
+    min-height: 18.0625rem;
+    position: relative;
+    width: 100vw;
+    max-width: 100vw;
+    overflow: hidden;
+    background: #090806;
+
+    &::before {
+        content: "";
+        background-image: url('/assets/images/librariann-login-library.png');
+        background-size: cover;
+        background-position: center center;
+        background-repeat: no-repeat;
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        opacity: 1;
+        width: 100%;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at center 43%, rgba(7, 6, 4, 0.08), rgba(7, 6, 4, 0.38) 62%, rgba(7, 6, 4, 0.62)),
+            linear-gradient(180deg, rgba(7, 6, 4, 0.12), rgba(7, 6, 4, 0.52));
+    }
+
+    .brand-lockup {
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        max-width: min(92vw, 38rem);
+        text-align: left;
+
+        .brand-mark {
+            display: grid;
+            place-items: center;
+            flex: 0 0 4.25rem;
+            width: 4.25rem;
+            height: 4.25rem;
+            border: 1px solid rgba(244, 185, 66, 0.42);
+            border-radius: 1.2rem;
+            color: #f4b942;
+            background: linear-gradient(145deg, rgba(244, 185, 66, 0.18), rgba(244, 185, 66, 0.04));
+            box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.42);
+            font-size: 1.8rem;
+        }
+
+        .brand-kicker {
+            display: block;
+            color: #f4b942;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.16em;
+        }
+
+        h1 {
+            margin: 0.08rem 0 0;
+            color: #fff;
+            font-family: "League Spartan", "Spartan", sans-serif;
+            font-size: clamp(2.15rem, 7vw, 3.15rem);
+            font-weight: 700;
+            line-height: 0.95;
+            letter-spacing: -0.035em;
+        }
+
+        p {
+            margin: 0.42rem 0 0;
+            color: rgba(255, 255, 255, 0.66);
+            font-size: 0.85rem;
+        }
+    }
+
+    .login-container {
+        z-index: 1;
+        width: 100%;
+    }
+
+    .card {
+        background: rgba(20, 23, 28, 0.9);
+        color: #fff;
+        max-width: 21rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 1rem;
+        box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.48);
+        backdrop-filter: blur(1rem);
+
+        &:focus {
+            border: 0.125rem solid white;
+
+        }
+
+
+        ::ng-deep.card-title {
+            h2 {
+                font-family: 'Poppins', sans-serif;
+                display: inline-block;
+                vertical-align: middle;
+                width: 100%;
+                font-size: 1.05rem;
+                font-weight: 600;
+            }
+        }
+
+        .card-text {
+            font-family: "EBGaramond", "Helvetica Neue", sans-serif;
+        }
+    }
+
+    @media (max-width: 35rem) {
+        &::before {
+            background-position: 48% center;
+        }
+
+        .brand-lockup {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+}

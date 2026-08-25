@@ -1,0 +1,117 @@
+<ng-container *transloco="let t; prefix: 'side-nav'">
+
+  @let sideNavVisible = navService.sideNavVisibilitySignal();
+  @let sideNavCollapsed = navService.sideNavCollapsedSignal();
+
+  @if (accountService.currentUser()) {
+    <div class="side-nav-container"
+         [class.closed]="sideNavCollapsed"
+         [class.hidden]="!sideNavVisible">
+      <div class="side-nav">
+
+        <app-side-nav-item icon="fa-home" [title]="t('home')" link="/home/">
+          <ng-container actions>
+            <app-card-actionables [actions]="homeActions" labelBy="home" iconClass="fa-ellipsis-v" (actionHandler)="performHomeAction($event)" />
+          </ng-container>
+        </app-side-nav-item>
+
+        <app-side-nav-item icon="fa-compass" [title]="t('discover')" link="/discover/" />
+
+        @if (showServerToolsGroup()) {
+          <app-side-nav-group [label]="t('server-tools-header')" [(open)]="serverToolsOpen" [railMode]="sideNavCollapsed">
+            @if (accountService.canSearchIndexers()) {
+              <app-side-nav-item icon="fa-magnifying-glass" [title]="t('release-search')" link="/release-search/" />
+            }
+
+            @if (accountService.canManageAcquisition()) {
+              <app-side-nav-item icon="fa-satellite-dish" [title]="t('monitoring')" link="/monitoring/" />
+              <app-side-nav-item icon="fa-heart-pulse" [title]="t('acquisition-activity')" link="/acquisition-activity/" />
+            }
+
+            @if (accountService.canManageMetadata()) {
+              <app-side-nav-item icon="fa-tags" [title]="t('metadata-discovery')" link="/metadata-discovery/" />
+            }
+
+            @for (navStream of groupedStreams()?.externalSources ?? []; track navStream.name + navStream.order) {
+              <app-side-nav-item icon="fa-server" [title]="navStream.name" [link]="getExternalSourceLink(navStream)"
+                                 [externalSourceId]="navStream.externalSource?.id ?? 0" [external]="true" />
+            }
+          </app-side-nav-group>
+        }
+
+        @if (groupedStreams(); as grouped) {
+          @if (grouped.libraries.length > 0) {
+            <app-side-nav-group [label]="t('libraries-header')" [count]="grouped.libraries.length"
+                               [(open)]="librariesOpen" [railMode]="sideNavCollapsed">
+              @for (navStream of grouped.libraries; track navStream.name + navStream.order) {
+                <app-side-nav-item [link]="'/library/' + navStream.libraryId + '/'"
+                                   [icon]="getLibraryTypeIcon(navStream.library!.type)"
+                                   [imageUrl]="getLibraryImage(navStream.library!)" [title]="navStream.library!.name"
+                                   [comparisonMethod]="'startsWith'">
+                  <ng-container actions>
+                    <app-card-actionables [entity]="navStream.library!" [actions]="actions" [labelBy]="navStream.name" iconClass="fa-ellipsis-v" />
+                  </ng-container>
+                </app-side-nav-item>
+              }
+            </app-side-nav-group>
+          }
+
+          <app-side-nav-group [label]="t('browse-header')" [(open)]="browseOpen" [railMode]="sideNavCollapsed">
+            @for (navStream of grouped.browse; track navStream.name + navStream.order) {
+              @switch (navStream.streamType) {
+                @case (SideNavStreamType.AllSeries) {
+                  <app-side-nav-item icon="fa-regular fa-rectangle-list" [title]="t('all-series')" link="/all-series/" />
+                }
+                @case (SideNavStreamType.BrowsePeople) {
+                  <app-side-nav-item icon="fa-users" [title]="t('browse-people')" link="/browse/people/" />
+                }
+              }
+            }
+            <app-side-nav-item icon="fa-filter" [title]="t('smart-filters-browse')" link="/all-filters/" />
+            <app-side-nav-item icon="fa-shapes" [title]="t('browse-genres')" link="/browse/genres/" />
+            <app-side-nav-item icon="fa-hashtag" [title]="t('browse-tags')" link="/browse/tags/" />
+            <app-side-nav-item icon="fa-comment-dots" [title]="t('browse-annotations')" link="/browse/annotations/" />
+          </app-side-nav-group>
+
+          @if (grouped.smartFilters.length > 0) {
+            <app-side-nav-group [label]="t('smart-filters-header')" [count]="grouped.smartFilters.length"
+                               [(open)]="smartFiltersOpen" [railMode]="sideNavCollapsed">
+              @for (navStream of grouped.smartFilters; track navStream.name + navStream.order) {
+                <app-side-nav-item icon="fa-bars-staggered" [title]="navStream.name" [link]="getSmartFilterBaseLink(navStream)" [queryParams]="navStream.smartFilterEncoded" />
+              }
+            </app-side-nav-group>
+          }
+
+          @if (grouped.collections.length > 0) {
+            <app-side-nav-group [label]="t('collections-header')" [(open)]="collectionsOpen" [railMode]="sideNavCollapsed">
+              @for (navStream of grouped.collections; track navStream.name + navStream.order) {
+                @switch (navStream.streamType) {
+                  @case (SideNavStreamType.Collections) {
+                    <app-side-nav-item icon="fa-list" [title]="t('collections')" link="/collections/" />
+                  }
+                  @case (SideNavStreamType.ReadingLists) {
+                    <app-side-nav-item icon="fa-list-ol" [title]="t('reading-lists')" link="/lists/">
+                      <ng-container actions>
+                        <app-card-actionables [actions]="readingListActions" labelBy="reading-lists" iconClass="fa-ellipsis-v" (actionHandler)="performReadingListAction($event)" />
+                      </ng-container>
+                    </app-side-nav-item>
+                  }
+                  @case (SideNavStreamType.Bookmarks) {
+                    <app-side-nav-item icon="fa-bookmark" [title]="t('bookmarks')" link="/bookmarks/" />
+                  }
+                  @case (SideNavStreamType.WantToRead) {
+                    <app-side-nav-item icon="fa-star" [title]="t('want-to-read')" link="/want-to-read/" />
+                  }
+                }
+              }
+            </app-side-nav-group>
+          }
+        }
+      </div>
+    </div>
+  }
+
+  @if (breakpointService.isTabletOrBelow()) {
+    <div class="side-nav-overlay" (click)="toggleNavBar()" [class.closed]="sideNavCollapsed"></div>
+  }
+</ng-container>

@@ -1,0 +1,158 @@
+<ng-container *transloco="let t; prefix: 'manage-tts-settings'">
+    <form [formGroup]="settingsForm">
+
+      <ng-container>
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('kokoroEndpointUrl'); as formControl) {
+            <app-setting-item [title]="t('kokoro-endpoint-url-label')" [subtitle]="t('kokoro-endpoint-url-tooltip')">
+              <ng-template #view>
+                {{formControl.value || t('kokoro-endpoint-url-unset')}}
+              </ng-template>
+              <ng-template #edit>
+                <input class="form-control" formControlName="kokoroEndpointUrl" type="url" placeholder="http://localhost:8880">
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-1 ms-1">
+          <div class="col-auto">
+            <button type="button" class="btn btn-secondary btn-sm" [disabled]="kokoroStatusChecking" (click)="checkKokoroStatus()">
+              @if (kokoroStatusChecking) {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+              }
+              {{t('kokoro-check-status')}}
+            </button>
+            @if (kokoroStatus; as status) {
+              <span class="ms-2">
+                @if (!status.isConfigured) {
+                  <span class="text-muted">{{t('kokoro-status-not-configured')}}</span>
+                } @else if (status.isReachable) {
+                  <span class="text-success">
+                    {{t('kokoro-status-connected', {version: status.version, gpu: (status.gpuActive ? t('kokoro-gpu-on') : t('kokoro-gpu-off')), voices: status.voiceCount})}}
+                  </span>
+                } @else {
+                  <span class="text-danger">{{t('kokoro-status-unreachable')}}</span>
+                }
+              </span>
+            }
+          </div>
+
+          <div class="col-auto ms-3">
+            @if (kokoroProcessStatus?.isInstalled) {
+              <button type="button" class="btn btn-secondary btn-sm" [disabled]="kokoroReleaseChecking" (click)="checkKokoroLatestRelease()">
+                @if (kokoroReleaseChecking) {
+                  <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                }
+                {{t('kokoro-check-updates')}}
+              </button>
+              @if (kokoroLatestRelease; as release) {
+                <span class="ms-2">
+                  @if (release.success) {
+                    {{t('kokoro-latest-release-is')}}
+                    <a [href]="release.htmlUrl" target="_blank" rel="noopener noreferrer">{{release.tagName}}</a>
+                  } @else {
+                    <span class="text-danger">{{t('kokoro-release-check-failed')}}</span>
+                  }
+                </span>
+              }
+            } @else {
+              <button type="button" class="btn btn-primary btn-sm" [disabled]="kokoroInstalling" (click)="startKokoroInstall()">
+                @if (kokoroInstalling) {
+                  <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                }
+                {{t('kokoro-install')}}
+              </button>
+              @if (kokoroInstallStatus; as install) {
+                <span class="ms-2">
+                  @if (install.inProgress) {
+                    <span class="text-muted">{{kokoroInstallProgressLabel()}}</span>
+                  } @else if (install.success) {
+                    <span class="text-success">{{t('kokoro-install-success')}}</span>
+                  } @else if (install.error) {
+                    <span class="text-danger">{{install.error}}</span>
+                  }
+                </span>
+              }
+            }
+          </div>
+        </div>
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('kokoroExecutablePath'); as formControl) {
+            <app-setting-item [title]="t('kokoro-executable-path-label')" [subtitle]="t('kokoro-executable-path-tooltip')">
+              <ng-template #view>
+                {{formControl.value || t('kokoro-executable-path-unset')}}
+              </ng-template>
+              <ng-template #edit>
+                <div class="d-flex">
+                  <input class="form-control" formControlName="kokoroExecutablePath" type="text" placeholder="C:\Kokoro\LKS.Server">
+                  <button type="button" class="btn btn-secondary ms-1" (click)="openDirectoryChooser(formControl.value, 'kokoroExecutablePath')">{{t('change')}}</button>
+                </div>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('kokoroUseGpu'); as formControl) {
+            <app-setting-item [title]="t('kokoro-use-gpu-label')" [subtitle]="t('kokoro-use-gpu-tooltip')">
+              <ng-template #view>
+                {{formControl.value ? t('kokoro-gpu-on') : t('kokoro-gpu-off')}}
+              </ng-template>
+              <ng-template #edit>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" formControlName="kokoroUseGpu">
+                </div>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+        <div class="row g-0 mt-1 ms-1 align-items-center">
+          <div class="col-auto">
+            <button type="button" class="btn btn-success btn-sm" [disabled]="kokoroProcessBusy || kokoroProcessStatus?.isRunning"
+                    (click)="startKokoroProcess()">
+              @if (kokoroProcessBusy) {
+                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+              }
+              {{t('kokoro-start')}}
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm ms-1" [disabled]="kokoroProcessBusy || !kokoroProcessStatus?.isManaged || !kokoroProcessStatus?.isRunning"
+                    (click)="stopKokoroProcess()">
+              {{t('kokoro-stop')}}
+            </button>
+            @if (kokoroProcessStatus; as processStatus) {
+              <span class="ms-2">
+                @if (processStatus.isManaged && processStatus.isRunning) {
+                  <span class="text-success">{{t('kokoro-process-running', {pid: processStatus.processId})}}</span>
+                } @else if (processStatus.error) {
+                  <span class="text-danger">{{processStatus.error}}</span>
+                } @else {
+                  <span class="text-muted">{{t('kokoro-process-not-running')}}</span>
+                }
+              </span>
+            }
+          </div>
+        </div>
+        <p class="text-muted small ms-1 mb-0">{{t('kokoro-manage-hint')}}</p>
+
+        <div class="row g-0 mt-2">
+          @if(settingsForm.get('kokoroSyncFfmpegPath'); as formControl) {
+            <app-setting-item [title]="t('kokoro-sync-ffmpeg-path-label')" [subtitle]="t('kokoro-sync-ffmpeg-path-tooltip')">
+              <ng-template #view>
+                {{formControl.value ? t('kokoro-sync-ffmpeg-path-on') : t('kokoro-sync-ffmpeg-path-off')}}
+              </ng-template>
+              <ng-template #edit>
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch" formControlName="kokoroSyncFfmpegPath">
+                </div>
+              </ng-template>
+            </app-setting-item>
+          }
+        </div>
+
+      </ng-container>
+
+    </form>
+
+</ng-container>

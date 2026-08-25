@@ -1,0 +1,377 @@
+/**
+ * Button theming.
+ *
+ * Each semantic variant (primary, secondary, warning, danger) is customised through a small set of
+ * CSS custom property "slots" defined in the active theme (see themes/dark.scss):
+ *   solid:   --btn-{variant}-{text|bg|border}-color plus the matching -hover- slots
+ *   outline: --btn-outline-{variant}-text-color for the resting state; the fill reuses the solid slots
+ *   text:    --btn-{variant}-text-text-color, shared by the label and the icon (single colour)
+ * Shared core slots: --btn-focus-boxshadow-color, --btn-focus-ring-width, --btn-disabled-*,
+ * --btn-fa-icon-color and --btn-actions-*.
+ *
+ * Bootstrap is loaded before this file in styles.scss, so these overrides win at equal specificity
+ * without needing !important.
+ */
+
+.btn {
+  --bs-btn-disabled-bg: var(--btn-disabled-bg-color);
+  --bs-btn-disabled-border-color: var(--btn-disabled-border-color);
+  --bs-btn-disabled-color: var(--btn-disabled-text-color);
+}
+
+button {
+  i {
+    color: var(--btn-fa-icon-color);
+  }
+}
+
+/* Solid variants */
+.btn-primary {
+  color: var(--btn-primary-text-color);
+  background-color: var(--btn-primary-bg-color);
+  border-color: var(--btn-primary-border-color);
+
+  --bs-btn-active-bg: var(--primary-color-dark-shade);
+  --bs-btn-active-border-color: var(--primary-color-dark-shade);
+
+  i {
+    color: var(--btn-primary-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-primary-hover-text-color);
+    background-color: var(--btn-primary-hover-bg-color);
+    border-color: var(--btn-primary-hover-border-color);
+
+    i {
+      color: var(--btn-primary-hover-text-color);
+    }
+  }
+}
+
+.btn-secondary {
+  color: var(--btn-secondary-text-color);
+  background-color: var(--btn-secondary-bg-color);
+  border-color: var(--btn-secondary-border-color);
+
+  i {
+    color: var(--btn-secondary-text-color);
+  }
+}
+
+.btn-warning {
+  color: var(--btn-warning-text-color);
+  background-color: var(--btn-warning-bg-color);
+  border-color: var(--btn-warning-border-color);
+
+  --bs-btn-active-bg: var(--btn-warning-hover-bg-color);
+  --bs-btn-active-border-color: var(--btn-warning-hover-border-color);
+
+  i {
+    color: var(--btn-warning-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-warning-hover-text-color);
+    background-color: var(--btn-warning-hover-bg-color);
+    border-color: var(--btn-warning-hover-border-color);
+
+    i {
+      color: var(--btn-warning-hover-text-color);
+    }
+  }
+}
+
+.btn-danger {
+  color: var(--btn-danger-text-color);
+  background-color: var(--btn-danger-bg-color);
+  border-color: var(--btn-danger-border-color);
+
+  --bs-btn-active-bg: var(--btn-danger-hover-bg-color);
+  --bs-btn-active-border-color: var(--btn-danger-hover-border-color);
+
+  i {
+    color: var(--btn-danger-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-danger-hover-text-color);
+    background-color: var(--btn-danger-hover-bg-color);
+    border-color: var(--btn-danger-hover-border-color);
+
+    i {
+      color: var(--btn-danger-hover-text-color);
+    }
+  }
+}
+
+/* Outline variants */
+.btn-outline-primary {
+  color: var(--btn-outline-primary-text-color);
+  background-color: transparent;
+  border-color: var(--btn-primary-border-color);
+
+  --bs-btn-active-bg: var(--btn-primary-hover-bg-color);
+  --bs-btn-active-border-color: var(--btn-primary-hover-border-color);
+
+  i {
+    color: var(--btn-outline-primary-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-primary-hover-text-color);
+    background-color: var(--btn-primary-hover-bg-color);
+    border-color: var(--btn-primary-hover-border-color);
+
+    i {
+      color: var(--btn-primary-hover-text-color);
+    }
+  }
+}
+
+.btn-outline-secondary {
+  color: var(--btn-outline-secondary-text-color);
+  background-color: transparent;
+  border-color: var(--btn-secondary-border-color);
+
+  i {
+    color: var(--btn-outline-secondary-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-secondary-text-color);
+    background-color: var(--btn-secondary-bg-color);
+    border-color: var(--btn-secondary-border-color);
+
+    i {
+      color: var(--btn-secondary-text-color);
+    }
+  }
+}
+
+.btn-outline-warning {
+  color: var(--btn-outline-warning-text-color);
+  background-color: transparent;
+  border-color: var(--btn-warning-border-color);
+
+  i {
+    color: var(--btn-outline-warning-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-warning-text-color);
+    background-color: var(--btn-warning-bg-color);
+    border-color: var(--btn-warning-border-color);
+
+    i {
+      color: var(--btn-warning-text-color);
+    }
+  }
+}
+
+.btn-outline-danger {
+  color: var(--btn-outline-danger-text-color);
+  background-color: transparent;
+  border-color: var(--error-color);
+
+  i {
+    color: var(--btn-outline-danger-text-color);
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--btn-outline-danger-hover-text-color);
+    background-color: var(--error-color);
+    border-color: var(--error-color);
+
+    i {
+      color: var(--btn-outline-danger-hover-text-color);
+    }
+  }
+}
+
+.btn-actions {
+  color: var(--btn-fa-icon-color);
+  border-radius: var(--btn-actions-border-radius);
+
+  &:hover {
+    background-color: var(--btn-actions-hover-bg);
+  }
+
+  &:active, &:focus-visible {
+    background-color: rgb(255 255 255 / 28%) !important;
+    border-color: transparent !important;
+  }
+}
+
+.btn-close {
+  filter: var(--btn-icon-filter) !important;
+}
+
+.btn-primary:disabled, .btn-primary.disabled {
+  background-color: var(--btn-disabled-bg-color);
+  color: var(--btn-disabled-text-color);
+  border-color: var(--btn-disabled-border-color);
+
+  i {
+    color: var(--btn-disabled-text-color);
+  }
+}
+
+button:disabled, .form-control:disabled, .form-control[readonly], .disabled, :disabled {
+  cursor: not-allowed;
+}
+
+.btn-link {
+  color: var(--body-text-color);
+
+  > i {
+    color: var(--body-text-color) !important;
+  }
+
+  &:hover, &:focus-visible {
+    color: var(--primary-color);
+  }
+}
+
+/* Icon and text-only buttons: the label and the icon share one colour */
+.btn-icon, .btn-primary-text, .btn-secondary-text, .btn-warning-text, .btn-danger-text {
+  cursor: pointer;
+  color: var(--body-text-color);
+  border: none;
+
+  i {
+    color: var(--body-text-color);
+  }
+
+  &:disabled {
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: transparent;
+  }
+
+  &:hover {
+    color: var(--body-text-color);
+    border: none;
+  }
+
+  &.active {
+    border: none;
+
+    > i {
+      color: var(--primary-color) !important;
+    }
+  }
+}
+
+.btn-primary-text {
+  color: var(--btn-primary-text-text-color);
+
+  i {
+    color: var(--btn-primary-text-text-color);
+  }
+
+  // On hover the label and icon shift together to the variant's solid-hover shade
+  &:hover {
+    color: var(--btn-primary-text-hover-color);
+
+    i {
+      color: inherit;
+    }
+  }
+}
+
+.btn-secondary-text {
+  color: var(--btn-secondary-text-text-color);
+
+  i {
+    color: var(--btn-secondary-text-text-color);
+  }
+
+  &:hover {
+    color: var(--btn-secondary-text-hover-color);
+
+    i {
+      color: inherit;
+    }
+  }
+}
+
+.btn-warning-text {
+  color: var(--btn-warning-text-text-color);
+
+  i {
+    color: var(--btn-warning-text-text-color);
+  }
+
+  &:hover {
+    color: var(--btn-warning-text-hover-color);
+
+    i {
+      color: inherit;
+    }
+  }
+}
+
+.btn-danger-text {
+  color: var(--btn-danger-text-text-color);
+
+  i {
+    color: var(--btn-danger-text-text-color);
+  }
+
+  &:hover {
+    color: var(--btn-danger-text-hover-color);
+
+    i {
+      color: inherit;
+    }
+  }
+}
+
+.btn.btn-secondary.alt {
+  background-color: var(--btn-alt-bg-color);
+  border-color: var(--btn-alt-border-color);
+
+  &:hover {
+    background-color: var(--btn-alt-hover-bg-color);
+    font-weight: var(--btn-secondary-font-weight);
+  }
+
+  &:focus-visible {
+    background-color: var(--btn-alt-focus-bg-color);
+    box-shadow: 0 0 0 0.05rem var(--btn-alt-focus-boxshadow-color);
+    font-weight: var(--btn-secondary-font-weight);
+  }
+}
+
+/* Single, consistent keyboard-focus ring for every variant */
+.btn-check:focus-visible + .btn,
+.btn:focus-visible {
+  box-shadow: 0 0 0 var(--btn-focus-ring-width) var(--btn-focus-boxshadow-color);
+  outline: none;
+}
+
+/* Button with dropdown */
+.btn-group.dropdown button {
+  &.dropdown-item {
+    i {
+      color: var(--dropdown-item-text-color);
+    }
+
+    &:hover i {
+      color: var(--dropdown-item-hover-text-color);
+    }
+  }
+}
+
+.btn-unstyled {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  outline: inherit;
+}
+
+.btn-unstyled:focus {
+  outline: none;
+}

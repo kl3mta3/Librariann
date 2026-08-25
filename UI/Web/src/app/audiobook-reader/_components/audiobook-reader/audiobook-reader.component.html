@@ -1,0 +1,129 @@
+<ng-container *transloco="let t; prefix: 'audiobook-reader'">
+  <div class="audiobook-reader">
+
+    <div class="top-bar">
+      <button class="icon-btn" type="button" (click)="close()" [attr.aria-label]="t('back')">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+      </button>
+      <div class="top-bar-title">
+        <span class="title">{{playback.chapterInfo()?.seriesName}}</span>
+        @if (playback.chapterInfo()?.chapterTitle) {
+          <span class="subtitle">{{playback.chapterInfo()?.chapterTitle}}</span>
+        }
+      </div>
+      <div class="top-bar-spacer"></div>
+    </div>
+
+    <div class="cover-wrapper">
+      <img class="cover" [src]="playback.coverImageUrl()" [alt]="playback.chapterInfo()?.seriesName" />
+    </div>
+
+    <div class="meta">
+      <h1 class="series-name">{{playback.chapterInfo()?.seriesName}}</h1>
+      @if (playback.chapterInfo()?.chapterTitle) {
+        <div class="chapter-label">{{playback.chapterInfo()?.chapterTitle}}</div>
+      }
+    </div>
+
+    <div class="scrubber">
+      <div class="scrubber-track" #scrubberTrack (click)="onScrubberClick($event, scrubberTrack)">
+        <div class="scrubber-fill" [style.width.%]="playback.progressPercent()"></div>
+        @for (marker of playback.chapterMarkers(); track marker.startSeconds) {
+          <div class="scrubber-tick" [style.left.%]="(marker.startSeconds / playback.duration()) * 100"
+               [title]="marker.title ?? ''"></div>
+        }
+        <div class="scrubber-handle" [style.left.%]="playback.progressPercent()"></div>
+      </div>
+      <div class="scrubber-labels">
+        <span>{{playback.formatTime(playback.currentTime())}}</span>
+        <span>-{{playback.formatTime(playback.remainingTime())}}</span>
+      </div>
+    </div>
+
+    <div class="transport">
+      <button class="icon-btn" type="button" (click)="playback.goToAdjacentChapter('prev')" [attr.aria-label]="t('prev-chapter')">
+        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+      </button>
+      <button class="icon-btn rewind" type="button" (click)="playback.seekRelative(-playback.REWIND_SECONDS)" [attr.aria-label]="t('rewind')">
+        <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+        <span class="seconds-label">{{playback.REWIND_SECONDS}}</span>
+      </button>
+      <button class="play-pause-btn" type="button" (click)="playback.togglePlayPause()" [attr.aria-label]="playback.isPlaying() ? t('pause') : t('play')">
+        <i class="fa-solid" [class.fa-play]="!playback.isPlaying()" [class.fa-pause]="playback.isPlaying()" aria-hidden="true"></i>
+      </button>
+      <button class="icon-btn forward" type="button" (click)="playback.seekRelative(playback.FORWARD_SECONDS)" [attr.aria-label]="t('forward')">
+        <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+        <span class="seconds-label">{{playback.FORWARD_SECONDS}}</span>
+      </button>
+      <button class="icon-btn" type="button" (click)="playback.goToAdjacentChapter('next')" [attr.aria-label]="t('next-chapter')">
+        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div class="control-row">
+      <div class="control-item">
+        <button class="control-btn" type="button" (click)="toggleDrawer('speed')">
+          <span class="speed-value">{{playback.playbackRate()}}x</span>
+          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <span class="control-label">{{t('speed')}}</span>
+        @if (showSpeedDrawer()) {
+          <div class="control-drawer">
+            @for (speed of playback.speedOptions; track speed) {
+              <button type="button" class="drawer-option" [class.active]="speed === playback.playbackRate()" (click)="setPlaybackRate(speed)">{{speed}}x</button>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="control-item">
+        <button class="control-btn" type="button" (click)="toggleDrawer('chapters')" [disabled]="playback.chapterMarkers().length === 0">
+          <i class="fa-solid fa-book-open" aria-hidden="true"></i>
+        </button>
+        <span class="control-label">{{t('chapters')}}</span>
+        @if (showChaptersDrawer()) {
+          <div class="control-drawer chapters-drawer">
+            @for (marker of playback.chapterMarkers(); track marker.startSeconds) {
+              <button type="button" class="drawer-option" (click)="jumpToMarker(marker)">{{marker.title || t('chapter-at', {time: playback.formatTime(marker.startSeconds)})}}</button>
+            } @empty {
+              <span class="drawer-empty">{{t('no-chapters')}}</span>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="control-item">
+        <button class="control-btn" type="button" (click)="toggleDrawer('volume')">
+          <i class="fa-solid" [class.fa-volume-high]="playback.volume() > 0" [class.fa-volume-xmark]="playback.volume() === 0" aria-hidden="true"></i>
+        </button>
+        <span class="control-label">{{t('volume')}}</span>
+        @if (showVolumeDrawer()) {
+          <div class="control-drawer volume-drawer">
+            <input type="range" min="0" max="1" step="0.05" [value]="playback.volume()"
+                   (input)="playback.setVolume($any($event.target).valueAsNumber)" />
+          </div>
+        }
+      </div>
+
+      <div class="control-item">
+        <button class="control-btn" type="button" (click)="toggleDrawer('sleep')">
+          <i class="fa-solid fa-moon" aria-hidden="true"></i>
+        </button>
+        <span class="control-label">
+          {{playback.sleepTimerMinutesRemaining() !== null ? t('sleep-remaining', {minutes: playback.sleepTimerMinutesRemaining()}) : t('sleep')}}
+        </span>
+        @if (showSleepDrawer()) {
+          <div class="control-drawer">
+            @for (minutes of playback.sleepTimerOptions; track minutes) {
+              <button type="button" class="drawer-option" (click)="startSleepTimer(minutes)">{{t('sleep-minutes', {minutes})}}</button>
+            }
+            @if (playback.sleepTimerMinutesRemaining() !== null) {
+              <button type="button" class="drawer-option cancel" (click)="playback.clearSleepTimer()">{{t('sleep-cancel')}}</button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+  </div>
+</ng-container>

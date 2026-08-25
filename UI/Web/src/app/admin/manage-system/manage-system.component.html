@@ -1,0 +1,53 @@
+<ng-container *transloco="let t; prefix: 'manage-system'">
+  @if (serverInfo) {
+    <div class="mb-3">
+      <h3>{{t('title')}}</h3>
+
+      <div class="row">
+        <div class="col-4">
+          <div>{{t('version-title')}}</div>
+          <div>{{serverInfo.librariannVersion}}</div>
+        </div>
+
+        <div class="col-4">
+          <div>{{t('installId-title')}}</div>
+          <div>{{serverInfo.installId}}</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-4">
+          <div>{{t('first-install-version-title')}}</div>
+          <div>{{serverInfo.firstInstallVersion}}</div>
+        </div>
+
+        <div class="col-4">
+          <div>{{t('first-install-date-title')}}</div>
+          <div>{{serverInfo.firstInstallDate | utcToLocalTime:'shortDate'}}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="setting-section-break"></div>
+  }
+
+  <div class="mb-3">
+    <h3>{{t('more-info-title')}}</h3>
+    <div class="row">
+      <div class="col-4">{{t('discord-title')}}</div>
+      <div class="col"><a href="https://discord.gg/fkNu9f8uyu" target="_blank" rel="noopener noreferrer">discord.gg/fkNu9f8uyu</a></div>
+    </div>
+	<div class="row">
+      <div class="col-4">{{t('source-title')}}</div>
+      <div class="col"><a href="https://github.com/Kl3mta3/Librariann" target="_blank" rel="noopener noreferrer">github.com/Kl3mta3/Librariann</a></div>
+    </div>
+
+  </div>
+
+  <div class="setting-section-break"></div>
+
+  <div class="mb-3">
+    <h3>{{t('updates-title')}}</h3>
+    <app-changelog />
+  </div>
+</ng-container>

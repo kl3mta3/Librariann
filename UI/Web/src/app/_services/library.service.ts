@@ -1,0 +1,196 @@
+import {HttpClient, httpResource} from '@angular/common/http';
+import {DestroyRef, inject, Injectable} from '@angular/core';
+import {of} from 'rxjs';
+import {filter, map, tap} from 'rxjs/operators';
+import {environment} from 'src/environments/environment';
+import {JumpKey} from '../_models/jumpbar/jump-key';
+import {Library, LibraryType} from '../_models/library/library';
+import {DirectoryDto} from '../_models/system/directory-dto';
+import {EVENTS, MessageHubService} from "./message-hub.service";
+import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
+import {MetadataProvider} from "../_models/librariannplus/metadata-provider.enum";
+import {ScrobbleProvider} from "./scrobbling.service";
+
+
+@Injectable({
+  providedIn: 'root'
+})
+export class LibraryService {
+  private readonly httpClient = inject(HttpClient);
+  private readonly messageHub = inject(MessageHubService);
+  private readonly destroyRef = inject(DestroyRef);
+
+
+  baseUrl = environment.apiUrl;
+
+  private libraryNames: {[key:number]: string} | undefined = undefined;
+  private libraryTypes: {[key: number]: LibraryType} | undefined = undefined;
+
+  constructor() {
+    this.messageHub.messages$.pipe(takeUntilDestroyed(this.destroyRef), filter(e => e.event === EVENTS.LibraryModified),
+      tap((e) => {
+        console.log('LibraryModified event came in, clearing library name cache');
+        this.libraryNames = undefined;
+        this.libraryTypes = undefined;
+    })).subscribe();
+  }
+
+  getLibraryNames() {
+    if (this.libraryNames != undefined) {
+      return of(this.libraryNames);
+    }
+
+    return this.httpClient.get<Library[]>(this.baseUrl + 'library/libraries').pipe(map(libraries => {
+      this.libraryNames = {};
+      this.libraryTypes = {};
+      libraries.forEach(lib => {
+        this.libraryNames![lib.id] = lib.name;
+        this.libraryTypes![lib.id] = lib.type;
+      });
+      return this.libraryNames;
+    }));
+  }
+
+  /** Call once after user auth to warm the library name + type cache. */
+  cacheLibraryInfo() {
+    return this.getLibraryNames();
+  }
+
+  getCachedLibrary(libraryId: number): {id: number; name: string; type: LibraryType} | undefined {
+    if (!this.libraryNames?.hasOwnProperty(libraryId) || !this.libraryTypes?.hasOwnProperty(libraryId)) {
+      return undefined;
+    }
+    return { id: libraryId, name: this.libraryNames[libraryId], type: this.libraryTypes[libraryId] };
+  }
+
+  getLibraryName(libraryId: number) {
+    if (this.libraryNames != undefined && this.libraryNames.hasOwnProperty(libraryId)) {
+      return of(this.libraryNames[libraryId]);
+    }
+    return this.httpClient.get<Library[]>(this.baseUrl + 'library/libraries').pipe(map(l => {
+      this.libraryNames = {};
+      l.forEach(lib => {
+        if (this.libraryNames !== undefined) {
+          this.libraryNames[lib.id] = lib.name;
+        }
+      });
+      return this.libraryNames[libraryId];
+    }));
+  }
+
+  libraryNameExists(name: string) {
+    return this.httpClient.get<boolean>(this.baseUrl + 'library/name-exists?name=' + name);
+  }
+
+  listDirectories(rootPath: string) {
+    let query = '';
+    if (rootPath !== undefined && rootPath.length > 0) {
+      query = '?path=' + encodeURIComponent(rootPath);
+    }
+
+    return this.httpClient.get<DirectoryDto[]>(this.baseUrl + 'library/list' + query);
+  }
+
+  hasFilesAtRoot(roots: Array<string>) {
+    return this.httpClient.post<Array<string>>(this.baseUrl + 'library/has-files-at-root', {roots});
+  }
+
+  getJumpBar(libraryId: number) {
+    return this.httpClient.get<JumpKey[]>(this.baseUrl + 'library/jump-bar?libraryId=' + libraryId);
+  }
+
+  /**
+   * Admin-only
+   * @param libraryId
+   */
+  getLibrary(libraryId: number) {
+    return this.httpClient.get<Library>(this.baseUrl + 'library?libraryId=' + libraryId);
+  }
+
+  getLibraries() {
+    return this.httpClient.get<Library[]>(this.baseUrl + 'library/libraries');
+  }
+
+  getLibrariesForUser(userId: number) {
+    return this.httpClient.get<Library[]>(this.baseUrl + 'library/user-libraries?userId=' + userId);
+  }
+
+  updateLibrariesForMember(username: string, selectedLibraries: Library[]) {
+    return this.httpClient.post(this.baseUrl + 'library/grant-access', {username, selectedLibraries});
+  }
+
+  scan(libraryId: number, force = false) {
+    return this.httpClient.post(this.baseUrl + 'library/scan?libraryId=' + libraryId + '&force=' + force, {});
+  }
+
+  scanMultipleLibraries(libraryIds: Array<number>, force = false) {
+    return this.httpClient.post(this.baseUrl + 'library/scan-multiple', {ids: libraryIds, force: force});
+  }
+
+  refreshMetadata(libraryId: number, forceUpdate = false, forceColorscape = false) {
+    return this.httpClient.post(this.baseUrl + `library/refresh-metadata?libraryId=${libraryId}&force=${forceUpdate}&forceColorscape=${forceColorscape}`, {});
+  }
+
+  refreshMetadataMultipleLibraries(libraryIds: Array<number>, force = false, forceColorscape = false) {
+    return this.httpClient.post(this.baseUrl + 'library/refresh-metadata-multiple?forceColorscape=' + forceColorscape, {ids: libraryIds, force: force});
+  }
+
+  copySettingsFromLibrary(sourceLibraryId: number, targetLibraryIds: Array<number>, includeType: boolean) {
+    return this.httpClient.post(this.baseUrl + 'library/copy-settings-from', {sourceLibraryId, targetLibraryIds, includeType});
+  }
+
+  create(model: {name: string, type: number, folders: string[]}) {
+    return this.httpClient.post<Library>(this.baseUrl + 'library/create', model);
+  }
+
+  delete(libraryId: number) {
+    return this.httpClient.delete(this.baseUrl + 'library/delete?libraryId=' + libraryId, {});
+  }
+
+  deleteMultiple(libraryIds: Array<number>) {
+    if (libraryIds.length === 0) {
+      return of();
+    }
+
+    return this.httpClient.delete(this.baseUrl + 'library/delete-multiple', {
+      body: libraryIds,
+    });
+  }
+
+  update(model: {name: string, folders: string[], id: number}) {
+    return this.httpClient.post<Library>(this.baseUrl + 'library/update', model);
+  }
+
+  getLibraryTypeSync(libraryId: number): LibraryType | undefined {
+    return this.getCachedLibrary(libraryId)?.type;
+  }
+
+  getLibraryType(libraryId: number) {
+    if (this.libraryTypes != undefined && this.libraryTypes.hasOwnProperty(libraryId)) {
+      return of(this.libraryTypes[libraryId]);
+    }
+    return this.httpClient.get<LibraryType>(this.baseUrl + 'library/type?libraryId=' + libraryId).pipe(map(l => {
+      if (this.libraryTypes === undefined) {
+        this.libraryTypes = {};
+      }
+
+      this.libraryTypes[libraryId] = l;
+      return this.libraryTypes[libraryId];
+    }));
+  }
+
+  getSupportedMetadataProviders(libraryType: () => LibraryType) {
+    return httpResource<MetadataProvider[]>(
+      () => this.baseUrl + 'library/metadata-providers?libraryType=' + libraryType()
+    ).asReadonly();
+  }
+
+  getLibraryTypesWithMetadataSupport() {
+    return this.httpClient.get<LibraryType[]>(this.baseUrl + 'library/metadata-enabled-libraries')
+  }
+
+  getLibraryTypesWithScrobbleSupport() {
+    return this.httpClient.get<LibraryType[]>(this.baseUrl + 'library/scrobble-enabled-libraries')
+  }
+
+}

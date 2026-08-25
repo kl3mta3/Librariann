@@ -1,0 +1,15 @@
+.side-nav {
+  background:
+    linear-gradient(180deg, rgba(20, 23, 29, 0.98), rgba(10, 12, 15, 0.98));
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0.8rem 0 2rem rgba(0, 0, 0, 0.18);
+}
+
+:host ::ng-deep app-side-nav-item {
+  .active,
+  [aria-current='page'] {
+    color: #fff;
+    background: linear-gradient(90deg, rgba(229, 160, 13, 0.18), transparent);
+    box-shadow: inset 0.2rem 0 #e5a00d;
+  }
+}

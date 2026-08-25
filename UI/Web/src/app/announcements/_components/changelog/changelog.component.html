@@ -1,0 +1,27 @@
+<div class="main-container container-fluid">
+  <ng-container *transloco="let t; prefix: 'changelog'">
+    <div class="changelog">
+
+      @for(update of updates; track update; let indx = $index) {
+
+        <app-accordion class="mb-2" [headingLevel]="2">
+          <span accTitle>{{update.updateTitle}}</span>
+
+          @if (update.isOnNightlyInRelease) {
+            <span accBadges class="badge bg-secondary">{{t('nightly', {version: update.currentVersion})}}</span>
+          } @else if (update.isReleaseEqual) {
+            <span accBadges class="badge bg-secondary">{{t('installed')}}</span>
+          } @else if (update.isReleaseNewer && indx === 0) {
+            <span accBadges class="badge bg-secondary">{{t('available')}}</span>
+          }
+
+          <app-changelog-update-item [update]="update" [showExtras]="true" [index]="indx" />
+        </app-accordion>
+      }
+    </div>
+
+
+    <app-loading [loading]="isLoading" />
+
+  </ng-container>
+</div>

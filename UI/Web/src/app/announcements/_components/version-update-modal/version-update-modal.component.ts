@@ -1,0 +1,72 @@
+import {ChangeDetectionStrategy, Component, computed, inject, input} from '@angular/core';
+import {UpdateVersionEvent} from "../../../_models/events/update-version-event";
+import {TranslocoDirective, TranslocoService} from "@jsverse/transloco";
+import {NgbActiveModal} from "@ng-bootstrap/ng-bootstrap";
+import {ChangelogUpdateItemComponent} from "../changelog-update-item/changelog-update-item.component";
+import {clearTransloco} from "../../../../libs/transloco-util";
+
+@Component({
+  selector: 'app-version-update-modal',
+  imports: [
+    ChangelogUpdateItemComponent,
+    TranslocoDirective
+  ],
+  templateUrl: './version-update-modal.component.html',
+  styleUrl: './version-update-modal.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class VersionUpdateModalComponent {
+  private readonly translocoService = inject(TranslocoService);
+  private readonly modal = inject(NgbActiveModal);
+
+  /** Determines which modal variant to show, drives messaging and buttons */
+  mode = input<'refresh' | 'update-available' | 'out-of-date'>('refresh');
+  /** Changelog data, null for 'out-of-date' modal*/
+  update = input<UpdateVersionEvent | null>(null);
+  /** Number of versions out of date, only applicable for 'out-of-date' modal */
+  versionsOutOfDate = input<number>(0);
+
+  isDocker = computed(() => this.update()?.isDocker ?? false);
+  private readonly localePrefix: Record<string, string> = {
+    'refresh': 'new-version',
+    'update-available': 'update-notification',
+    'out-of-date': 'out-of-date',
+  };
+  title = computed(() => {
+    const update = this.update();
+    const mode = this.mode();
+    if (mode === 'update-available' && update?.updateTitle != '') {
+        return update?.updateTitle ?? `${this.localePrefix[this.mode()]}.title`;
+    }
+
+    return `${this.localePrefix[this.mode()]}.title`;
+
+  });
+
+  close() {
+    this.modal.dismiss();
+  }
+
+  refresh() {
+    this.bustLocaleCache();
+    // Refresh manually
+    location.reload();
+
+    // Dismiss anyway in case reload doesn't work
+    this.modal.dismiss();
+  }
+
+
+  private bustLocaleCache() {
+    clearTransloco();
+    const locale = localStorage.getItem('librariann-locale') || 'en';
+    (this.translocoService as any).cache.delete(locale);
+    (this.translocoService as any).cache.clear();
+
+    // Retrigger transloco
+    setTimeout(() => {
+      this.translocoService.setActiveLang(locale);
+    }, 10);
+  }
+
+}

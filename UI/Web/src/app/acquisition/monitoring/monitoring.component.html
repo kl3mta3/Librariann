@@ -1,0 +1,104 @@
+<main class="monitoring-page" *transloco="let t; prefix: 'monitoring'">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">{{t('eyebrow')}}</p>
+      <h1>{{t('title')}}</h1>
+      <p>{{t('subtitle')}}</p>
+    </div>
+    <button class="btn btn-primary" type="button" (click)="newTarget()">
+      <i class="fa-solid fa-satellite-dish" aria-hidden="true"></i> {{t('add-target')}}
+    </button>
+  </header>
+
+  @if (editing()) {
+    <form class="monitor-editor" [formGroup]="form" (ngSubmit)="save()">
+      <div class="editor-title">
+        <div><p class="eyebrow">{{t('intent')}}</p><h2>{{form.controls.id.value ? t('edit-target') : t('new-target')}}</h2></div>
+        <button type="button" class="btn-close btn-close-white" [attr.aria-label]="t('cancel')" (click)="editing.set(false)"></button>
+      </div>
+      <div class="form-grid">
+        <label><span>{{t('monitor')}}</span><select class="form-select" formControlName="kind"><option [ngValue]="Kind.Book">{{t('book')}}</option><option [ngValue]="Kind.Series">{{t('series')}}</option><option [ngValue]="Kind.Author">{{t('author')}}</option></select></label>
+        <label><span>{{t('media-type')}}</span><select class="form-select" formControlName="mediaType"><option [ngValue]="MediaType.Book">{{t('books')}}</option><option [ngValue]="MediaType.Comic">{{t('comics')}}</option><option [ngValue]="MediaType.Manga">{{t('manga')}}</option></select></label>
+        <label class="wide"><span>{{form.controls.kind.value === Kind.Author ? t('author-name') : t('title-field')}}</span><input class="form-control" formControlName="title"></label>
+        @if (form.controls.kind.value !== Kind.Author) {
+          <label><span>{{t('author-field')}}</span><input class="form-control" formControlName="author"></label>
+        }
+        @if (form.controls.kind.value === Kind.Book) {
+          <label><span>{{t('isbn')}}</span><input class="form-control" formControlName="isbn"></label>
+        }
+        <label><span>{{t('quality-profile')}}</span><select class="form-select" formControlName="qualityProfileId">@for (profile of matchingProfiles(); track profile.id) {<option [ngValue]="profile.id">{{profile.name}}</option>}</select></label>
+        <label><span>{{t('language')}}</span><input class="form-control" formControlName="language"></label>
+        <label><span>{{t('interval')}}</span><input class="form-control" type="number" min="1" max="720" formControlName="searchIntervalHours"></label>
+        <label><span>{{t('external-provider')}}</span><input class="form-control" formControlName="externalProviderKey" placeholder="open-library"></label>
+        <label><span>{{t('external-id')}}</span><input class="form-control" formControlName="externalItemId"></label>
+        @if (form.controls.automaticGrabEnabled.value) {
+          <label><span>{{t('download-client')}}</span><select class="form-select" formControlName="downloadClientId"><option [ngValue]="undefined">{{t('select-client')}}</option>@for (client of clients(); track client.id) {<option [ngValue]="client.id">{{client.name}}</option>}</select></label>
+          <label><span>{{t('minimum-grab-score')}}</span><input class="form-control" type="number" min="0" max="500" formControlName="minimumAutomaticGrabScore"></label>
+        }
+      </div>
+      <div class="switch-row">
+        <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="monitorMissing"><span>{{t('missing')}}</span></label>
+        <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="monitorFuture"><span>{{t('future')}}</span></label>
+        <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="automaticGrabEnabled"><span>{{t('automatic-grab')}}</span></label>
+        <label class="form-check form-switch"><input class="form-check-input" type="checkbox" formControlName="isEnabled"><span>{{t('enabled')}}</span></label>
+      </div>
+      <p class="safety-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> {{form.controls.automaticGrabEnabled.value ? t('automatic-safety-note') : t('safety-note')}}</p>
+      <div class="editor-actions"><button type="button" class="btn btn-secondary" (click)="editing.set(false)">{{t('cancel')}}</button><button type="submit" class="btn btn-primary" [disabled]="form.invalid || saving()">{{t('save')}}</button></div>
+    </form>
+  }
+
+  <section class="targets" [attr.aria-label]="t('targets')">
+    @for (target of targets(); track target.id) {
+      <article class="target-card" [class.disabled]="!target.isEnabled">
+        <div class="target-kind"><i class="fa-solid" [class.fa-book]="target.kind === Kind.Book" [class.fa-layer-group]="target.kind === Kind.Series" [class.fa-user-pen]="target.kind === Kind.Author" aria-hidden="true"></i><span>{{kindLabel(target.kind)}}</span></div>
+        <div class="target-copy">
+          <div class="target-title"><h2>{{target.title}}</h2><span>{{mediaLabel(target.mediaType)}}</span></div>
+          @if (target.author) {<p class="author">{{target.author}}</p>}
+          <div class="chips"><span>{{target.language}}</span><span>{{target.searchIntervalHours}}h</span>@if (target.monitorMissing) {<span>{{t('missing')}}</span>}@if (target.monitorFuture) {<span>{{t('future')}}</span>}</div>
+          @if (target.automaticGrabEnabled) {<p class="catalog-summary"><i class="fa-solid fa-bolt" aria-hidden="true"></i> {{t('auto-grab-at', {score: target.minimumAutomaticGrabScore})}}</p>}
+          <p class="summary">{{target.lastSearchSummary || t('not-searched')}}</p>
+          @if (target.catalogSummary) {<p class="catalog-summary"><i class="fa-solid fa-list-check" aria-hidden="true"></i> {{target.catalogSummary}}</p>}
+          <small>{{t('next-search')}}: {{target.nextSearchAtUtc | date:'medium'}}</small>
+        </div>
+        <div class="target-actions">
+          <button class="btn btn-icon" type="button" [title]="t('search-now')" (click)="searchNow(target)" [disabled]="searchingId() === target.id"><i class="fa-solid fa-magnifying-glass" [class.fa-beat-fade]="searchingId() === target.id" aria-hidden="true"></i></button>
+          @if (target.externalProviderKey && target.externalItemId) {
+            <button class="btn btn-icon" type="button" [title]="t('sync-catalog')" (click)="syncCatalog(target)" [disabled]="syncingId() === target.id"><i class="fa-solid fa-arrows-rotate" [class.fa-spin]="syncingId() === target.id" aria-hidden="true"></i></button>
+          }
+          <button class="btn btn-icon" type="button" [title]="t('edit')" (click)="edit(target)"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+          <button class="btn btn-icon danger" type="button" [title]="t('delete')" (click)="remove(target)"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+        </div>
+      </article>
+    } @empty {
+      <div class="empty"><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i><h2>{{t('empty-title')}}</h2><p>{{t('empty-body')}}</p></div>
+    }
+  </section>
+
+  @if (wanted().length > 0) {
+    <section class="wanted-section">
+      <div class="section-heading"><p class="eyebrow">{{t('catalog')}}</p><h2>{{t('owned-missing')}}</h2><p>{{t('owned-missing-subtitle')}}</p></div>
+      <div class="wanted-grid">
+        @for (item of wanted(); track item.id) {
+          <article class="wanted-item" [attr.data-status]="item.status">
+            <span class="ownership"><i class="fa-solid" [class.fa-circle-check]="item.status === WantedStatus.Owned" [class.fa-circle-xmark]="item.status === WantedStatus.Missing" [class.fa-download]="item.status === WantedStatus.Downloading" [class.fa-eye-slash]="item.status === WantedStatus.Ignored" aria-hidden="true"></i></span>
+            <div><strong>{{item.title}}</strong><p>{{item.author}} @if (item.publicationYear) { · {{item.publicationYear}} }</p>@if (item.lastSearchSummary) {<p>{{item.lastSearchSummary}}</p>}</div>
+            <span class="wanted-status">{{wantedStatusLabel(item.status)}}</span>
+          </article>
+        }
+      </div>
+    </section>
+  }
+
+  <section class="history-section">
+    <div class="section-heading"><p class="eyebrow">{{t('audit')}}</p><h2>{{t('history')}}</h2><p>{{t('history-subtitle')}}</p></div>
+    <div class="history-list">
+      @for (run of history(); track run.id) {
+        <article class="history-row" [attr.data-status]="run.status">
+          <span class="history-icon"><i class="fa-solid" [class.fa-circle-check]="run.status === SearchStatus.CandidateFound" [class.fa-circle-minus]="run.status === SearchStatus.NoApprovedCandidate" [class.fa-triangle-exclamation]="run.status === SearchStatus.ProviderFailure" aria-hidden="true"></i></span>
+          <div><strong>{{run.query}}</strong><p>{{run.summary}}</p>@if (run.grabSummary) {<p>{{run.grabSummary}}</p>}<small>{{run.completedAtUtc | date:'medium'}} · {{run.resultCount}} {{t('results')}}</small></div>
+          <span class="run-status">{{statusLabel(run.status)}}</span>
+        </article>
+      } @empty {<p class="no-history">{{t('no-history')}}</p>}
+    </div>
+  </section>
+</main>

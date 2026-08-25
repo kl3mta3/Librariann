@@ -1,0 +1,373 @@
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  Injector,
+  input,
+  Input,
+  OnInit,
+  output,
+  Signal
+} from '@angular/core';
+import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
+import {FilterStatement} from '../../../_models/metadata/v2/filter-statement';
+import {BehaviorSubject, distinctUntilChanged, filter, map, Observable, of, startWith, switchMap, tap} from 'rxjs';
+import {MetadataService} from 'src/app/_services/metadata.service';
+import {FilterComparison} from 'src/app/_models/metadata/v2/filter-comparison';
+import {SeriesFilterField} from 'src/app/_models/metadata/v2/series-filter-field';
+import {AsyncPipe, NgStyle} from "@angular/common";
+import {FilterComparisonPipe} from "../../../_pipes/filter-comparison.pipe";
+import {takeUntilDestroyed, toSignal} from "@angular/core/rxjs-interop";
+import {Select2, Select2Option} from "ng-select2-component";
+import {NgbDate, NgbDateParserFormatter, NgbInputDatepicker, NgbTooltip} from "@ng-bootstrap/ng-bootstrap";
+import {TranslocoDirective} from "@jsverse/transloco";
+import {ValidFilterEntity} from "../../filter-settings";
+import {FilterUtilitiesService} from "../../../shared/_services/filter-utilities.service";
+import {AnnotationsFilterField} from "../../../_models/metadata/v2/annotations-filter";
+import {RgbaColor} from "../../../book-reader/_models/annotations/highlight-slot";
+
+interface FieldConfig {
+  type: PredicateType;
+  baseComparisons: FilterComparison[];
+  defaultValue: any;
+  allowsDateComparisons?: boolean;
+  allowsNumberComparisons?: boolean;
+  excludesMustContains?: boolean;
+  allowsIsEmpty?: boolean;
+}
+
+enum PredicateType {
+  Text = 1,
+  Number = 2,
+  Dropdown = 3,
+  Boolean = 4,
+  Date = 5
+}
+
+class FilterRowUi {
+  unit = '';
+  tooltip = ''
+  constructor(unit: string = '', tooltip: string = '') {
+    this.unit = unit;
+    this.tooltip = tooltip;
+  }
+}
+
+const unitLabels: Map<ValidFilterEntity, Map<number, FilterRowUi>> = new Map([
+  ['series', new Map([
+    [SeriesFilterField.ReadingDate as number, new FilterRowUi('unit-reading-date')],
+    [SeriesFilterField.AverageRating as number, new FilterRowUi('unit-average-rating')],
+    [SeriesFilterField.ReadProgress as number, new FilterRowUi('unit-reading-progress')],
+    [SeriesFilterField.UserRating as number, new FilterRowUi('unit-user-rating')],
+    [SeriesFilterField.ReadLast as number, new FilterRowUi('unit-read-last')],
+    [SeriesFilterField.FileSize as number, new FilterRowUi('unit-file-size', 'disclaimer-file-size')]
+  ])],
+  ['annotation', new Map([
+    [AnnotationsFilterField.HighlightSlots as number, new FilterRowUi('', 'disclaimer-highlight-slots')],
+  ])],
+])
+
+const StringComparisons = [
+  FilterComparison.Equal,
+  FilterComparison.NotEqual,
+  FilterComparison.BeginsWith,
+  FilterComparison.EndsWith,
+  FilterComparison.Matches];
+const DateComparisons = [
+  FilterComparison.IsBefore,
+  FilterComparison.IsAfter,
+  FilterComparison.Equal,
+  FilterComparison.NotEqual,];
+const NumberComparisons = [
+  FilterComparison.Equal,
+  FilterComparison.NotEqual,
+  FilterComparison.LessThan,
+  FilterComparison.LessThanEqual,
+  FilterComparison.GreaterThan,
+  FilterComparison.GreaterThanEqual];
+const DropdownComparisons = [
+  FilterComparison.Equal,
+  FilterComparison.NotEqual,
+  FilterComparison.Contains,
+  FilterComparison.NotContains,
+  FilterComparison.MustContains];
+const BooleanComparisons = [
+  FilterComparison.Equal
+]
+
+@Component({
+  selector: 'app-metadata-row-filter',
+  templateUrl: './metadata-filter-row.component.html',
+  styleUrls: ['./metadata-filter-row.component.scss'],
+  imports: [
+    ReactiveFormsModule,
+    AsyncPipe,
+    FilterComparisonPipe,
+    NgbTooltip,
+    TranslocoDirective,
+    NgbInputDatepicker,
+    Select2,
+    NgStyle
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class MetadataFilterRowComponent<TFilter extends number = number, TSort extends number = number> implements OnInit {
+
+  private readonly cdRef = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly dateParser = inject(NgbDateParserFormatter);
+  private readonly metadataService = inject(MetadataService);
+  private readonly filterUtilitiesService = inject(FilterUtilitiesService);
+  private readonly injector = inject(Injector);
+
+  /**
+   * Slightly misleading as this is the initial state and will be updated on the filterStatement event emitter
+   */
+  @Input() preset!: FilterStatement<TFilter>;
+  entityType = input.required<ValidFilterEntity>();
+  readonly filterStatement = output<FilterStatement<TFilter>>();
+
+
+  formGroup!: FormGroup;
+  validComparisons$: BehaviorSubject<FilterComparison[]> = new BehaviorSubject([FilterComparison.Equal] as FilterComparison[]);
+  predicateType$: BehaviorSubject<PredicateType> = new BehaviorSubject(PredicateType.Text as PredicateType);
+  dropdownOptions$ = of<Select2Option[]>([]);
+
+  loaded: boolean = false;
+
+
+  private comparisonSignal!: Signal<FilterComparison>;
+  private inputSignal!: Signal<TFilter>;
+
+  isEmptySelected: Signal<boolean> = computed(() => false);
+  uiLabel: Signal<FilterRowUi | null> = computed(() => null);
+  isMultiSelectDropdownAllowed: Signal<boolean> = computed(() => false);
+
+  filterFieldOptions: Signal<{title: string, value: TFilter}[]> = computed(() => []);
+
+  ngOnInit() {
+
+    this.formGroup = new FormGroup({
+      'comparison': new FormControl<FilterComparison>(FilterComparison.Equal, []),
+      'filterValue': new FormControl<string | number>('', []),
+      'input': new FormControl<TFilter>(this.filterUtilitiesService.getDefaultFilterField<TFilter>(this.entityType()), [])
+    });
+
+    this.comparisonSignal = toSignal<FilterComparison>(
+      this.formGroup.get('comparison')!.valueChanges.pipe(
+        startWith(this.formGroup.get('comparison')!.value),
+        map(d => parseInt(d + '', 10) as FilterComparison)
+      )
+      , {requireSync: true, injector: this.injector});
+    this.inputSignal = toSignal<TFilter>(
+      this.formGroup.get('input')!.valueChanges.pipe(
+        startWith(this.formGroup.get('input')!.value),
+        map(d => parseInt(d + '', 10) as TFilter)
+      )
+      , {requireSync: true, injector: this.injector});
+
+    this.isEmptySelected = computed(() => this.comparisonSignal() === FilterComparison.IsEmpty || this.comparisonSignal() === FilterComparison.IsNotEmpty);
+    this.uiLabel = computed(() => unitLabels.get(this.entityType())?.get(this.inputSignal()) ?? null);
+
+    this.isMultiSelectDropdownAllowed = computed(() => {
+      return this.comparisonSignal() === FilterComparison.Contains || this.comparisonSignal() === FilterComparison.NotContains || this.comparisonSignal() === FilterComparison.MustContains;
+    });
+
+    this.filterFieldOptions = computed(() => {
+      return this.filterUtilitiesService.getFilterFields(this.entityType());
+    });
+
+    this.formGroup.get('input')?.valueChanges.pipe(
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef),
+      tap((val: string) => this.handleFieldChange(val)),
+    ).subscribe();
+    this.populateFromPreset();
+
+    this.formGroup.get('filterValue')?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+
+    // Dropdown dynamic option selection
+    this.dropdownOptions$ = this.formGroup.get('input')!.valueChanges.pipe(
+      startWith(this.preset.value),
+      distinctUntilChanged(),
+      filter(() => {
+        return this.filterUtilitiesService.getDropdownFields<TFilter>(this.entityType()).includes(this.inputSignal());
+      }),
+      switchMap((_) => this.getDropdownObservable()),
+      takeUntilDestroyed(this.destroyRef)
+    );
+
+
+
+    this.formGroup!.valueChanges.pipe(
+      distinctUntilChanged(),
+      tap(_ => this.propagateFilterUpdate()),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe();
+
+    this.loaded = true;
+    this.cdRef.markForCheck();
+  }
+
+  propagateFilterUpdate() {
+    const stmt = {
+      comparison: parseInt(this.formGroup.get('comparison')?.value, 10) as FilterComparison,
+      field: parseInt(this.formGroup.get('input')?.value, 10) as TFilter,
+      value: this.formGroup.get('filterValue')?.value!
+    };
+
+    const dateFields = this.filterUtilitiesService.getDateFields(this.entityType());
+    const booleanFields = this.filterUtilitiesService.getBooleanFields(this.entityType());
+    if (typeof stmt.value === 'object' && dateFields.includes(stmt.field)) {
+      stmt.value = this.dateParser.format(stmt.value);
+    }
+
+    // Some ids can get through and be numbers, convert them to strings for the backend
+    if (typeof stmt.value === 'number' && !Number.isNaN(stmt.value)) {
+      stmt.value = stmt.value + '';
+    }
+
+    if (typeof stmt.value === 'boolean') {
+      stmt.value = stmt.value + '';
+    }
+
+    if (stmt.comparison !== FilterComparison.IsEmpty) {
+      if (!stmt.value && (![SeriesFilterField.SeriesName, SeriesFilterField.Summary].includes(stmt.field) && !booleanFields.includes(stmt.field))) return;
+    }
+
+    this.filterStatement.emit(stmt);
+  }
+
+  populateFromPreset() {
+    const val = this.preset.value === "undefined" || !this.preset.value ? '' : this.preset.value;
+    this.formGroup.get('comparison')?.patchValue(this.preset.comparison);
+    this.formGroup.get('input')?.patchValue(this.preset.field);
+
+    const dropdownFields = this.filterUtilitiesService.getDropdownFields<TFilter>(this.entityType());
+    const stringFields = this.filterUtilitiesService.getStringFields<TFilter>(this.entityType());
+    const dateFields = this.filterUtilitiesService.getDateFields(this.entityType());
+    const booleanFields = this.filterUtilitiesService.getBooleanFields(this.entityType());
+
+    if (stringFields.includes(this.preset.field)) {
+      this.formGroup.get('filterValue')?.patchValue(val);
+    } else if (booleanFields.includes(this.preset.field)) {
+      // Must be an empty string for checkbox to see it as false
+      this.formGroup.get('filterValue')?.patchValue(val === 'true' ? val : '');
+    } else if (dateFields.includes(this.preset.field)) {
+      this.formGroup.get('filterValue')?.patchValue(this.dateParser.parse(val));
+    }
+    else if (dropdownFields.includes(this.preset.field)) {
+      if (this.isMultiSelectDropdownAllowed() || val.includes(',')) {
+        this.formGroup.get('filterValue')?.patchValue(val.split(',').map(d => parseInt(d, 10)));
+      } else {
+        if (this.preset.field === SeriesFilterField.Languages) {
+          this.formGroup.get('filterValue')?.patchValue(val);
+        } else {
+          this.formGroup.get('filterValue')?.patchValue(parseInt(val, 10));
+        }
+      }
+    } else {
+      this.formGroup.get('filterValue')?.patchValue(parseInt(val, 10));
+    }
+
+
+    this.cdRef.markForCheck();
+  }
+
+  getDropdownObservable(): Observable<Select2Option[]> {
+      const filterField = this.inputSignal();
+      return this.metadataService.getOptionsForFilterField<TFilter>(filterField, this.entityType());
+  }
+
+  handleFieldChange(val: string) {
+    const inputVal = parseInt(val, 10) as TFilter;
+
+    const stringFields = this.filterUtilitiesService.getStringFields<TFilter>(this.entityType());
+    const dropdownFields = this.filterUtilitiesService.getDropdownFields<TFilter>(this.entityType());
+    const numberFields = this.filterUtilitiesService.getNumberFields<TFilter>(this.entityType());
+    const booleanFields = this.filterUtilitiesService.getBooleanFields<TFilter>(this.entityType());
+    const dateFields = this.filterUtilitiesService.getDateFields<TFilter>(this.entityType());
+    const fieldsThatShouldIncludeIsEmpty = this.filterUtilitiesService.getFieldsThatShouldIncludeIsEmpty<TFilter>(this.entityType());
+    const fieldsThatShouldIncludeIsNotEmpty = this.filterUtilitiesService.getFieldsThatShouldIncludeIsNotEmpty<TFilter>(this.entityType());
+    const numberFieldsThatIncludeDateComparisons = this.filterUtilitiesService.getNumberFieldsThatIncludeDateComparisons<TFilter>(this.entityType());
+    const dropdownFieldsThatIncludeNumberComparisons = this.filterUtilitiesService.getDropdownFieldsThatIncludeNumberComparisons<TFilter>(this.entityType());
+    const dropdownFieldsWithoutMustContains = this.filterUtilitiesService.getDropdownFieldsWithoutMustContains<TFilter>(this.entityType());
+    const customComparisons = this.filterUtilitiesService.getCustomComparisons(this.entityType(), inputVal);
+
+    let baseComparisons: FilterComparison[] = [];
+    let predicateType: PredicateType;
+    let defaultValue: string | number | boolean;
+
+    if (stringFields.includes(inputVal)) {
+      baseComparisons = [...StringComparisons];
+      predicateType = PredicateType.Text;
+      defaultValue = '';
+    } else if (numberFields.includes(inputVal)) {
+      baseComparisons = [...NumberComparisons];
+      if (numberFieldsThatIncludeDateComparisons.includes(inputVal)) {
+        baseComparisons.push(...DateComparisons);
+      }
+      predicateType = PredicateType.Number;
+      defaultValue = 0;
+    } else if (dateFields.includes(inputVal)) {
+      baseComparisons = [...DateComparisons];
+      predicateType = PredicateType.Date;
+      defaultValue = false;
+    } else if (booleanFields.includes(inputVal)) {
+      baseComparisons = [...BooleanComparisons];
+      predicateType = PredicateType.Boolean;
+      defaultValue = false;
+    } else if (dropdownFields.includes(inputVal)) {
+      baseComparisons = [...DropdownComparisons];
+      if (dropdownFieldsThatIncludeNumberComparisons.includes(inputVal)) {
+        baseComparisons.push(...NumberComparisons);
+      }
+      if (dropdownFieldsWithoutMustContains.includes(inputVal)) {
+        baseComparisons = baseComparisons.filter(c => c !== FilterComparison.MustContains);
+      }
+      predicateType = PredicateType.Dropdown;
+      defaultValue = 0;
+    } else{
+      return;
+    }
+
+    if (fieldsThatShouldIncludeIsEmpty.includes(inputVal)) baseComparisons.push(FilterComparison.IsEmpty);
+    if (fieldsThatShouldIncludeIsNotEmpty.includes(inputVal)) baseComparisons.push(FilterComparison.IsNotEmpty);
+
+    // Custom comparisons need to also be included in some base type to drive the fields
+    const comps = (customComparisons?.length ?? 0) > 0 ? customComparisons : baseComparisons;
+
+    this.validComparisons$.next([...new Set(comps)]);
+    this.predicateType$.next(predicateType);
+
+    if (this.loaded) {
+      this.formGroup.get('filterValue')?.patchValue(defaultValue);
+
+      if (comps) {
+        this.formGroup.get('comparison')?.patchValue(comps[0]);
+      }
+    }
+
+    this.cdRef.markForCheck();
+  }
+
+  onDateSelect(_: NgbDate) {
+    this.propagateFilterUpdate();
+  }
+
+  updateIfDateFilled() {
+    this.propagateFilterUpdate();
+  }
+
+  selectOptionStyle(c?: RgbaColor) {
+    if (!c) return {}
+
+    return { 'color': `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a})` };
+  }
+
+  protected readonly FilterComparison = FilterComparison;
+  protected readonly PredicateType = PredicateType;
+}

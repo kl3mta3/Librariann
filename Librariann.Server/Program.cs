@@ -1,0 +1,349 @@
+using System;
+using System.IO;
+using System.IO.Abstractions;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
+using Librariann.API.Database;
+using Librariann.API.Services;
+using Librariann.Common;
+using Librariann.Common.EnvironmentInfo;
+using Librariann.Database;
+using Librariann.Models.Entities.Enums;
+using Librariann.Models.Entities.User;
+using Librariann.Server.Logging;
+using Librariann.Server.ManualMigrations.v0._7._14;
+using Librariann.Server.ManualMigrations.v0._8._2;
+using Librariann.Server.ManualMigrations.v0._8._4;
+using Librariann.Services;
+using Librariann.Services.Security;
+using Librariann.Services.SignalR;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NetVips;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Display;
+using Log = Serilog.Log;
+
+namespace Librariann.Server;
+
+public class Program
+{
+    private static readonly int HttpPort = Configuration.Port;
+
+    protected Program()
+    {
+    }
+
+    public static async Task Main(string[] args)
+    {
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console(new MessageTemplateTextFormatter(LogLevelOptions.OutputTemplate))
+            .MinimumLevel
+            .Information()
+            .CreateBootstrapLogger();
+
+        if (await TryRunBackupUtilityAsync(args))
+        {
+            await Log.CloseAndFlushAsync();
+            return;
+        }
+
+        var directoryService = new DirectoryService(null!, new FileSystem());
+
+        try
+        {
+        }
+        catch (Exception exception)
+        {
+            Log.Fatal(exception, "Librariann import failed; Librariann was not started and the source was not modified");
+            return;
+        }
+
+        // Check if this is the first time running and if so, rename appsettings-init.json to appsettings.json
+        HandleFirstRunConfiguration();
+
+
+        // Before anything, check if JWT has been generated properly or if user still has default
+        EnsureJwtTokenKey();
+
+        try
+        {
+            var host = CreateHostBuilder(args).Build();
+
+            using var scope = host.Services.CreateScope();
+            var services = scope.ServiceProvider;
+            var unitOfWork = services.GetRequiredService<IUnitOfWork>();
+
+            try
+            {
+                var logger = services.GetRequiredService<ILogger<Program>>();
+                var context = services.GetRequiredService<DataContext>();
+
+                var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+                var isDbCreated = await context.Database.CanConnectAsync();
+                if (isDbCreated && pendingMigrations.Any())
+                {
+                    logger.LogInformation("Performing backup as migrations are needed. Backup will be librariann.db in temp folder");
+                    var migrationDirectory = await GetMigrationDirectory(context, directoryService);
+                    directoryService.ExistOrCreate(migrationDirectory);
+
+                    if (!directoryService.FileSystem.File.Exists(
+                            directoryService.FileSystem.Path.Join(migrationDirectory, "librariann.db")))
+                    {
+                        directoryService.CopyFileToDirectory(directoryService.FileSystem.Path.Join(directoryService.ConfigDirectory, "librariann.db"), migrationDirectory);
+                        logger.LogInformation("Database backed up to {MigrationDirectory}", migrationDirectory);
+                    }
+                }
+
+                // Apply Before manual migrations that need to run before actual migrations
+                if (isDbCreated)
+                {
+                    Task.Run(async () =>
+                        {
+                            // Apply all migrations on startup
+                            logger.LogInformation("Running Manual Migrations");
+
+                            try
+                            {
+                                // v0.7.14
+                                await new MigrateWantToReadExport(directoryService).RunAsync(context, logger);
+
+                                // v0.8.2
+                                await ManualMigrateSwitchToWal.Migrate(context, logger);
+
+                                // v0.8.4
+                                await ManualMigrateEncodeSettings.Migrate(context, logger);
+                            }
+                            catch (Exception)
+                            {
+                                /* Swallow */
+                            }
+
+                            await unitOfWork.CommitAsync();
+                            logger.LogInformation("Running Manual Migrations - complete");
+                        }).GetAwaiter()
+                        .GetResult();
+                }
+
+
+
+                var appLifetime = services.GetRequiredService<IHostApplicationLifetime>();
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    appLifetime.ApplicationStopping,
+                    timeoutCts.Token
+                );
+
+                try
+                {
+                    await context.Database.MigrateAsync(linkedCts.Token);
+                }
+                catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+                {
+                    logger.LogCritical("Failed to run critical Migrations, restore from a backup");
+                    Environment.Exit(1);
+                }
+                catch (OperationCanceledException)
+                {
+                    logger.LogCritical("Database migration cancelled due to shutdown signal");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogCritical(ex, "Failed to run critical Migrations, restore from a backup");
+                    Environment.Exit(1);
+                }
+
+
+                await Seed.SeedRoles(services.GetRequiredService<RoleManager<AppRole>>());
+                await Seed.SeedSettings(context, directoryService);
+                await Seed.SeedFonts(context);
+                await Seed.SeedDefaultStreams(unitOfWork);
+                await Seed.SeedDefaultSideNavStreams(unitOfWork);
+                await Seed.SeedMetadataSettings(context);
+                await Seed.SeedDefaultMetadataProviders(context);
+                await Seed.SeedDefaultHighlightSlots(unitOfWork);
+                await Seed.SeedScrobbleProviders(context);
+                // Encrypt recoverable credentials inherited from general settings before the server accepts requests
+                // or starts background integrations. This is idempotent and also upgrades plaintext Librariann imports.
+                await services.GetRequiredService<ISettingsService>()
+                    .ProtectStoredCredentialsAsync();
+                await services.GetRequiredService<IStreamService>()
+                    .ProtectStoredCredentialsAsync();
+            }
+            catch (Exception ex)
+            {
+                var logger = services.GetRequiredService<ILogger<Program>>();
+                var context = services.GetRequiredService<DataContext>();
+                var migrationDirectory = await GetMigrationDirectory(context, directoryService);
+
+                logger.LogCritical(ex, "A migration failed during startup. Restoring backup from {MigrationDirectory} and exiting", migrationDirectory);
+                directoryService.CopyFileToDirectory(directoryService.FileSystem.Path.Join(migrationDirectory, "librariann.db"), directoryService.ConfigDirectory);
+
+                return;
+            }
+
+            // Update the logger with the log level
+            var settings = await unitOfWork.SettingsRepository.GetSettingsDtoAsync();
+            LogLevelOptions.SwitchLogLevel(settings.LoggingLevel);
+
+            InitNetVips();
+
+            await host.RunAsync();
+        } catch (Exception ex)
+        {
+            Log.Fatal(ex, "Host terminated unexpectedly");
+        } finally
+        {
+            await Log.CloseAndFlushAsync();
+        }
+    }
+
+    private static async Task<bool> TryRunBackupUtilityAsync(string[] args)
+    {
+        if (args.Length == 0 || !string.Equals(args[0], "--decrypt-backup", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (args.Length != 3)
+        {
+            Log.Error("Usage: --decrypt-backup <encrypted-backup> <output-zip>. The passphrase is read from {Variable}",
+                BackupService.BackupPassphraseEnvironmentVariable);
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        var passphrase = Environment.GetEnvironmentVariable(BackupService.BackupPassphraseEnvironmentVariable);
+        if (string.IsNullOrEmpty(passphrase))
+        {
+            Log.Error("Set {Variable} before decrypting a backup",
+                BackupService.BackupPassphraseEnvironmentVariable);
+            Environment.ExitCode = 2;
+            return true;
+        }
+
+        try
+        {
+            await BackupArchiveEncryption.DecryptAsync(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]),
+                passphrase);
+            Log.Information("Encrypted Librariann backup was authenticated and decrypted to {OutputPath}",
+                Path.GetFullPath(args[2]));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Backup decryption failed; no partial output was retained");
+            Environment.ExitCode = 1;
+        }
+
+        return true;
+    }
+
+    private static void EnsureJwtTokenKey()
+    {
+        if (Configuration.CheckIfJwtTokenSet() || Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == Environments.Development) return;
+
+        Log.Logger.Information("Generating JWT TokenKey for encrypting user sessions...");
+        var rBytes = new byte[256];
+        RandomNumberGenerator.Create().GetBytes(rBytes);
+        Configuration.JwtToken = Convert.ToBase64String(rBytes).Replace("/", string.Empty);
+    }
+
+    private static void HandleFirstRunConfiguration()
+    {
+        var firstRunConfigFilePath = Path.Join(Directory.GetCurrentDirectory(), "config/appsettings-init.json");
+        var actualRunConfigFilePath = Path.Join(Directory.GetCurrentDirectory(), "config/appsettings.json");
+        if (File.Exists(firstRunConfigFilePath) && !File.Exists(actualRunConfigFilePath))
+        {
+            File.Move(firstRunConfigFilePath, actualRunConfigFilePath);
+        }
+    }
+
+    private static async Task<string> GetMigrationDirectory(DataContext context, IDirectoryService directoryService)
+    {
+        string? currentVersion = null;
+        try
+        {
+            if (!await context.ServerSetting.AnyAsync()) return "vUnknown";
+            currentVersion =
+                (await context.ServerSetting.SingleOrDefaultAsync(s =>
+                    s.Key == ServerSettingKey.InstallVersion))?.Value;
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+
+        if (string.IsNullOrEmpty(currentVersion))
+        {
+            currentVersion = "vUnknown";
+        }
+
+        var migrationDirectory = directoryService.FileSystem.Path.Join(directoryService.TempDirectory,
+            "migration", currentVersion);
+        return migrationDirectory;
+    }
+
+    private static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .UseSerilog((ctx, services, configuration) =>
+            {
+                LogLevelOptions.CreateConfig(ctx, configuration);
+            })
+            .ConfigureAppConfiguration((hostingContext, config) =>
+            {
+                config.Sources.Clear();
+
+                var env = hostingContext.HostingEnvironment;
+
+                config.AddJsonFile("config/appsettings.json", optional: true, reloadOnChange: false)
+                    .AddJsonFile($"config/appsettings.{env.EnvironmentName}.json",
+                        optional: true, reloadOnChange: false);
+            })
+            .ConfigureWebHostDefaults(webBuilder =>
+            {
+                webBuilder.UseKestrel((opts) =>
+                {
+                    var ipAddresses = Configuration.IpAddresses;
+                    if (OsInfo.IsDocker || string.IsNullOrEmpty(ipAddresses) || ipAddresses.Equals(Configuration.DefaultIpAddresses))
+                    {
+                        opts.ListenAnyIP(HttpPort, options => { options.Protocols = HttpProtocols.Http1AndHttp2; });
+                    }
+                    else
+                    {
+                        foreach (var ipAddress in ipAddresses.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            try
+                            {
+                                var address = System.Net.IPAddress.Parse(ipAddress.Trim());
+                                opts.Listen(address, HttpPort, options => { options.Protocols = HttpProtocols.Http1AndHttp2; });
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Fatal(ex, "Could not parse ip address {IPAddress}", ipAddress);
+                            }
+                        }
+                    }
+                });
+
+                webBuilder.UseStartup<Startup>();
+            });
+
+    /// <summary>
+    /// Ensure NetVips does not cache
+    /// </summary>
+    /// <remarks>https://github.com/kleisauke/net-vips/issues/6#issuecomment-394379299</remarks>
+    private static void InitNetVips()
+    {
+        Cache.MaxFiles = 0;
+
+    }
+}

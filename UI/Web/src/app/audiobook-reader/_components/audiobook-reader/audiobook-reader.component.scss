@@ -1,0 +1,315 @@
+:host {
+  display: block;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bs-body-bg, #1f2020);
+  color: #fff;
+  overflow-y: auto;
+}
+
+audio {
+  display: none;
+}
+
+.audiobook-reader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100%;
+  padding: 1rem 1.5rem 2rem;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.top-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0 1rem;
+}
+
+.top-bar-title {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.top-bar-spacer {
+  flex: 1 1 auto;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.1rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.cover-wrapper {
+  width: min(70vw, 18rem);
+  aspect-ratio: 1;
+  margin: 1rem 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.5);
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.meta {
+  text-align: center;
+  margin-bottom: 1.5rem;
+
+  .series-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .chapter-label {
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+.scrubber {
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
+.scrubber-track {
+  position: relative;
+  height: 0.35rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 0.2rem;
+  cursor: pointer;
+}
+
+.scrubber-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--primary-color, #4ac694);
+  border-radius: 0.2rem;
+}
+
+.scrubber-tick {
+  position: absolute;
+  top: -0.15rem;
+  width: 2px;
+  height: 0.65rem;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translateX(-1px);
+}
+
+.scrubber-handle {
+  position: absolute;
+  top: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.scrubber-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 0.5rem;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.rewind, .forward {
+  position: relative;
+  font-size: 1.5rem;
+
+  .seconds-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding-top: 0.15rem;
+  }
+}
+
+.play-pause-btn {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  background-color: #fff;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+
+  // Set directly on the icon (not relying on inheritance) so nothing upstream (a global button/icon color
+  // reset, dark-theme defaults, etc.) can leave the glyph the same color as the white circle behind it.
+  i {
+    color: #16181a;
+    font-size: 1.4rem;
+  }
+
+  &:hover {
+    background-color: #eee;
+  }
+}
+
+.control-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 1.25rem;
+}
+
+.control-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.control-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .speed-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .fa-chevron-down {
+    font-size: 0.65rem;
+  }
+}
+
+.control-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+.control-drawer {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2c2c2c;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.5);
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 8rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.chapters-drawer, .volume-drawer {
+  min-width: 12rem;
+}
+
+.drawer-option {
+  background: none;
+  border: none;
+  color: #fff;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &.active {
+    color: var(--primary-color, #4ac694);
+  }
+
+  &.cancel {
+    color: #e57373;
+  }
+}
+
+.drawer-empty {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.volume-drawer {
+  padding: 0.75rem 0.6rem;
+
+  input[type="range"] {
+    width: 100%;
+  }
+}

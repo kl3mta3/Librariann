@@ -1,0 +1,72 @@
+<ng-container *transloco="let t; prefix:'manage-user-tokens'">
+  <p>{{t('description')}}</p>
+
+  <app-responsive-table [rows]="users()" [trackByFn]="trackBy">
+    <ng-template #tableTemplate>
+      <ngx-datatable
+        class="bootstrap"
+        [rows]="users()"
+        [columnMode]="'force'"
+        rowHeight="auto"
+        [footerHeight]="50"
+      >
+
+        <ngx-datatable-column prop="username" [sortable]="true" [draggable]="false" [resizeable]="false">
+          <ng-template let-column="column" ngx-datatable-header-template>
+            {{t('username-header')}}
+          </ng-template>
+          <ng-template let-item="row" ngx-datatable-cell-template>
+            {{item.username}}
+          </ng-template>
+        </ngx-datatable-column>
+
+        @for (provider of scrobblingService.validExternalScrobbleProviders(); track provider) {
+          <ngx-datatable-column [sortable]="false" [draggable]="false" [resizeable]="false">
+            <ng-template let-column="column" ngx-datatable-header-template>
+              <app-scrobble-provider-image [provider]="provider" [size]="16" />
+              <span class="ms-2">{{provider | scrobbleProviderName}}</span>
+            </ng-template>
+            <ng-template let-item="row" ngx-datatable-cell-template>
+              @let info = getTokenValidityInfo(item, provider);
+              @if (info && info.validUntilUtc !== NULL_DATE) {
+                {{t('token-set-label')}} <span class="text-muted ms-1">{{t('expires-label', {date: info.validUntilUtc | utcToLocalTime:'shortDate'})}}</span>
+              } @else {
+                {{null | defaultValue}}
+              }
+
+            </ng-template>
+          </ngx-datatable-column>
+        }
+      </ngx-datatable>
+    </ng-template>
+
+    <ng-template #cardTemplate let-item let-idx="index">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h5 class="card-title mb-3">{{item.username}}</h5>
+
+          <div class="row g-2">
+            @for (provider of scrobblingService.validExternalScrobbleProviders(); track provider) {
+              <div class="col-12 mt-4">
+                <div class="text-muted small">
+                  <app-scrobble-provider-image [provider]="provider" [size]="16"  />
+                  <span class="ms-2">{{provider | scrobbleProviderName}}</span>
+                </div>
+                <div>
+                  @let info = getTokenValidityInfo(item, provider);
+                  @if (info && info.validUntilUtc != NULL_DATE) {
+                    {{t('token-set-label')}}
+                    <span class="text-muted ms-1">{{t('expires-label', {date: info.validUntilUtc | utcToLocalTime:'shortDate'})}}</span>
+                  } @else {
+                    {{null | defaultValue}}
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </ng-template>
+
+  </app-responsive-table>
+</ng-container>

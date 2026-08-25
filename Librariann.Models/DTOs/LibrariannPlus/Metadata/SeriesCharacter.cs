@@ -1,0 +1,21 @@
+using System.ComponentModel.DataAnnotations;
+namespace Librariann.Models.DTOs.LibrariannPlus.Metadata;
+#nullable enable
+
+public enum CharacterRole
+{
+    Main = 0,
+    Supporting = 1,
+    Background = 2
+}
+
+
+public sealed record SeriesCharacter
+{
+    public string Name { get; set; }
+    public required string Description { get; set; }
+    public required string Url { get; set; }
+    public string? ImageUrl { get; set; }
+    [EnumDataType(typeof(CharacterRole))]
+    public CharacterRole Role { get; set; }
+}

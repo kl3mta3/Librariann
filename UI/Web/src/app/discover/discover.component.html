@@ -1,0 +1,92 @@
+<main class="discover-page">
+  <header class="discover-hero">
+    <p class="eyebrow">LIBRARIANN DISCOVER</p>
+    <h1>One search. Your library and beyond.</h1>
+    <p>Find what you own, explore other editions, and—when permitted—see available releases without switching tools.</p>
+
+    <form [formGroup]="form" (ngSubmit)="search()" class="discover-search">
+      <div class="query-field">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <label class="visually-hidden" for="discover-query">Title, author, or ISBN</label>
+        <input id="discover-query" class="form-control" formControlName="query" placeholder="Search a title, author, or ISBN">
+      </div>
+      <input class="form-control" formControlName="author" placeholder="Author (optional)" aria-label="Author">
+      <select class="form-select" formControlName="mediaType" aria-label="Media type">
+        <option [ngValue]="MediaType.Book">Books</option>
+        <option [ngValue]="MediaType.Comic">Comics</option>
+        <option [ngValue]="MediaType.Manga">Manga</option>
+      </select>
+      @if (canIncludeAdult()) {
+        <label class="adult-toggle"><input type="checkbox" formControlName="includeAdult"><span>Include adult results<small>Off by default</small></span></label>
+      }
+      <button class="btn search-button" type="submit" [disabled]="form.invalid || searching()">
+        @if (searching()) { <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> }
+        Search
+      </button>
+    </form>
+  </header>
+
+  @if (result(); as data) {
+    @if (data.access.restrictedByContentPolicy) {
+      <div class="content-policy-note"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><strong>Protected profile</strong><span>External metadata and indexer results stay hidden because those sources cannot yet be classified reliably for this audience profile.</span></div></div>
+    }
+    <section class="result-section">
+      <div class="section-heading"><div><span class="section-kicker">IN YOUR LIBRARY</span><h2>Ready to read</h2></div><span class="count">{{data.library.series.length}}</span></div>
+      <div class="cover-grid">
+        @for (item of data.library.series; track item.seriesId) {
+          <a class="library-card" [routerLink]="['/library', item.libraryId, 'series', item.seriesId]">
+            <img [src]="imageService.getSeriesCoverImage(item.seriesId)" alt="" loading="lazy">
+            <div><strong>{{item.localizedName || item.name}}</strong><span>{{item.libraryName}}</span></div>
+          </a>
+        } @empty {
+          <div class="empty-card"><i class="fa-regular fa-books" aria-hidden="true"></i><strong>Not in your library yet</strong><span>External matches and releases appear below when your account has access.</span></div>
+        }
+      </div>
+    </section>
+
+    @if (data.access.canSearchExternalMetadata && data.externalMetadata; as metadata) {
+      <section class="result-section">
+        <div class="section-heading"><div><span class="section-kicker">EXTERNAL METADATA</span><h2>Other editions and matches</h2></div><span class="count">{{metadata.results.length}}</span></div>
+        <div class="metadata-row">
+          @for (match of metadata.results; track match.candidate.providerKey + ':' + match.candidate.externalId) {
+            <article class="metadata-card">
+              <div class="external-cover">
+                @if (match.candidate.coverUri) { <img [src]="match.candidate.coverUri" alt="" loading="lazy"> }
+                @else { <i class="fa-solid fa-book-open" aria-hidden="true"></i> }
+                <span>{{match.score}}</span>
+              </div>
+              <small>{{match.candidate.providerName}}</small>
+              @if (match.candidate.isAdult) { <span class="adult-badge">Adult</span> }
+              <strong>{{match.candidate.title}}</strong>
+              <p>{{match.candidate.authors.join(', ')}} @if (match.candidate.publicationYear) { · {{match.candidate.publicationYear}} }</p>
+              @if (match.candidate.detailsUri) { <a [href]="match.candidate.detailsUri" target="_blank" rel="noopener noreferrer">View source <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a> }
+            </article>
+          } @empty { <p class="section-empty">No external metadata matches were found.</p> }
+        </div>
+      </section>
+    }
+
+    @if (data.access.canSearchReleases && data.releases; as releases) {
+      <section class="result-section releases-section">
+        <div class="section-heading"><div><span class="section-kicker">AVAILABLE RELEASES</span><h2>Indexer results</h2></div><span class="count">{{releases.results.length}}</span></div>
+        <div class="release-list">
+          @for (decision of releases.results; track decision.release.providerKey + ':' + decision.release.providerReleaseId) {
+            <article class="release-card" [class.rejected]="!decision.isApproved">
+              <span class="format">{{formatLabel(decision.release.format)}}</span>
+              <div class="release-copy"><strong>{{decision.release.title}}</strong><p><span>{{decision.release.providerKey}}</span><span>{{decision.release.sizeBytes | bytes}}</span><span>{{decision.release.publishedAt | date:'mediumDate'}}</span><span><i class="fa-solid fa-arrow-up"></i> {{decision.release.seeders ?? '—'}}</span></p>
+                @if (decision.rejections.length) { <div class="rejections">@for (reason of decision.rejections; track reason.code) { <span>{{reason.message}}</span> }</div> }
+              </div>
+              <strong class="release-score">{{decision.score}}</strong>
+              @if (accountService.canGrabReleases() && decision.isApproved && decision.grabToken) {
+                @let matchingClients = compatibleClients(decision.release.protocol);
+                <div class="grab-controls"><select #client class="form-select" [disabled]="matchingClients.length === 0">@for (option of matchingClients; track option.id) { <option [value]="option.id">{{option.name}}</option> } @empty { <option value="">No compatible client</option> }</select><button class="btn" [disabled]="matchingClients.length === 0 || grabbing() === decision.grabToken" (click)="grab(decision, client.value)"><i class="fa-solid fa-download" aria-hidden="true"></i> Grab</button></div>
+              }
+            </article>
+          } @empty { <p class="section-empty">No releases were returned by your enabled indexers.</p> }
+        </div>
+      </section>
+    }
+  } @else if (searched()) {
+    <div class="page-empty">No results found.</div>
+  }
+</main>

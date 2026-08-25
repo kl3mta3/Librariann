@@ -1,0 +1,23 @@
+using Librariann.Models.Entities.Enums;
+using System.ComponentModel.DataAnnotations;
+
+namespace Librariann.Models.DTOs.Search;
+
+public sealed record SearchResultDto
+{
+    public int SeriesId { get; init; }
+    public string Name { get; init; } = default!;
+    public string OriginalName { get; init; } = default!;
+    public string SortName { get; init; } = default!;
+    public string LocalizedName { get; init; } = default!;
+    [EnumDataType(typeof(MangaFormat))]
+    public MangaFormat Format { get; init; }
+
+    // Grouping information
+    public string LibraryName { get; set; } = default!;
+    public int LibraryId { get; set; }
+
+    public int ReleaseYear { get; init; }
+    public int VolumeCount { get; init; }
+    public int ChapterCount { get; init; }
+}

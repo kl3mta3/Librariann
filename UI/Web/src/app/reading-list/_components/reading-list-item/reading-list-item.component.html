@@ -1,0 +1,85 @@
+<ng-container *transloco="let t; prefix: 'reading-list-item'">
+  <div class="reading-list-item">
+
+    <!-- Desktop: Image with overlay -->
+    <div class="image-container d-none d-md-block">
+      <div class="overlay">
+        <app-image [imageUrl]="imageService.getChapterCoverImage(item().chapterId)" width="6.625rem" />
+        @if (isUnread()) {
+          <div class="not-read-badge"></div>
+        }
+        @if (isInProgress()) {
+          <div class="progress-banner">
+            <ngb-progressbar type="primary" height="5px" [value]="item().pagesRead" [max]="pages()" />
+          </div>
+        }
+        @if (!editMode()) {
+          <div class="overlay-information" >
+            <div class="overlay-information--centered">
+              <span
+                class="card-title read-btn mx-auto"
+                style="width: auto;"
+                role="button"
+                tabindex="0"
+                (click)="readChapter(item())"
+                (keydown.enter)="readChapter(item())">
+              <div>
+                <i class="fa-solid fa-book" aria-hidden="true"></i>
+                <span class="visually-hidden">{{t('read')}}</span>
+              </div>
+            </span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Mobile: image + read button -->
+    <div class="d-md-none mobile-section">
+      <app-image [imageUrl]="imageService.getChapterCoverImage(item().chapterId)" width="5rem" />
+      @if (!editMode()) {
+        <button class="btn btn-outline-primary btn-sm mt-1" (click)="readChapter(item())">
+          {{t('read')}}
+        </button>
+      }
+    </div>
+
+
+    <!-- Content -->
+    <div class="item-content">
+      <div class="title-row">
+        <!-- Desktop: only issue number is a link -->
+        <span class="d-none d-md-inline">
+          <a [routerLink]="chapterDetailUrl()" class="chapter-number">{{renderChapterNumber()}}</a> {{chapterTitle()}}
+        </span>
+        <!-- Mobile: entire title is a link -->
+        <a [routerLink]="chapterDetailUrl()" class="d-md-none">
+          <span class="chapter-number">{{renderChapterNumber()}}</span> {{chapterTitle()}}
+        </a>
+        @if (releaseDate() !== NULL_DATE) {
+          <span class="release-date">{{releaseDate() | dateYearRange | defaultValue}}</span>
+        }
+      </div>
+
+      <!-- Meta row -->
+      <div class="meta-row">
+        <a [routerLink]="seriesUrl()" class="series-link">{{item().seriesName}}</a>
+        @if (writerName()) {
+          <span class="meta-person d-none d-md-inline"><i class="fa-solid fa-pen-nib" aria-hidden="true"></i> {{writerName()}}</span>
+        }
+        @if (pencillerName()) {
+          <span class="meta-person d-none d-md-inline"><i class="fa-solid fa-paintbrush" aria-hidden="true"></i> {{pencillerName()}}</span>
+        }
+        <span class="page-count">
+          <i class="fa-regular fa-file" aria-hidden="true"></i> {{t('pages-count', {num: pages()})}}
+        </span>
+      </div>
+
+      <!-- Summary with blur and fade -->
+      @if (summary()) {
+        <div class="summary-text" [appBlurToggle]="shouldBlur()" [appBlurToggleEnabled]="blurEnabled()" [innerHTML]="summary()"></div>
+      }
+    </div>
+
+  </div>
+</ng-container>

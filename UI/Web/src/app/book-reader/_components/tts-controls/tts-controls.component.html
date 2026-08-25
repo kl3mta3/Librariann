@@ -1,0 +1,61 @@
+<ng-container *transloco="let t; prefix: 'tts-controls'">
+  <div class="tts-control" (click)="$event.stopPropagation()">
+    <button class="btn btn-secondary btn-icon me-1" [title]="t('listen')" [disabled]="!tts.isSupported()" (click)="open.set(!open())">
+      <i class="fa-solid fa-headphones" aria-hidden="true"></i>
+      <span class="visually-hidden">{{t('listen')}}</span>
+    </button>
+
+    @if (open()) {
+      <section class="tts-panel" [attr.aria-label]="t('title')">
+        <header>
+          <div>
+            <strong>{{t('title')}}</strong>
+            <small>{{tts.providerId() === 'kokoro' ? t('kokoro-provider') : t('device-provider')}}</small>
+          </div>
+          <button class="btn btn-icon" [title]="t('close')" (click)="open.set(false)"><i class="fa fa-times" aria-hidden="true"></i></button>
+        </header>
+
+        @if (!tts.isSupported()) {
+          <p class="unsupported">{{t('unsupported')}}</p>
+        } @else {
+          <div class="transport">
+            @if (tts.state() === 'idle') {
+              <button class="btn btn-primary" (click)="listen()"><i class="fa-solid fa-play" aria-hidden="true"></i> {{t('listen')}}</button>
+            } @else if (tts.state() === 'paused') {
+              <button class="btn btn-primary" (click)="tts.resume()"><i class="fa-solid fa-play" aria-hidden="true"></i> {{t('resume')}}</button>
+            } @else {
+              <button class="btn btn-primary" (click)="tts.pause()"><i class="fa-solid fa-pause" aria-hidden="true"></i> {{t('pause')}}</button>
+            }
+            <button class="btn btn-outline-secondary" [disabled]="tts.state() === 'idle'" (click)="tts.stop()"><i class="fa-solid fa-stop" aria-hidden="true"></i> {{t('stop')}}</button>
+          </div>
+
+          <div class="navigation" [attr.aria-label]="t('navigation')">
+            <button class="btn btn-icon" [title]="t('previous-paragraph')" (click)="tts.previousParagraph()"><i class="fa-solid fa-backward-step" aria-hidden="true"></i></button>
+            <button class="btn btn-icon" [title]="t('previous-sentence')" (click)="tts.previousSentence()"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+            <span>{{tts.progressLabel() || '—'}}</span>
+            <button class="btn btn-icon" [title]="t('next-sentence')" (click)="tts.nextSentence()"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+            <button class="btn btn-icon" [title]="t('next-paragraph')" (click)="tts.nextParagraph()"><i class="fa-solid fa-forward-step" aria-hidden="true"></i></button>
+          </div>
+
+          <p class="current-text">{{tts.currentText() || t('ready')}}</p>
+
+          <label for="tts-voice">{{t('voice')}}</label>
+          <select id="tts-voice" class="form-select" [value]="tts.voiceId()" (change)="tts.setVoice(stringValue($event))">
+            @for (voice of tts.voices(); track voice.id) {
+              <option [value]="voice.id">{{voice.name}} · {{voice.language}}</option>
+            }
+          </select>
+
+          <div class="sliders">
+            <label for="tts-rate">{{t('speed')}} <span>{{tts.rate().toFixed(1)}}×</span></label>
+            <input id="tts-rate" type="range" min="0.5" max="2" step="0.1" [value]="tts.rate()" (change)="tts.setRate(numericValue($event))">
+            <label for="tts-pitch">{{t('pitch')}} <span>{{tts.pitch().toFixed(1)}}</span></label>
+            <input id="tts-pitch" type="range" min="0.5" max="2" step="0.1" [value]="tts.pitch()" (change)="tts.setPitch(numericValue($event))">
+            <label for="tts-volume">{{t('volume')}} <span>{{(tts.volume() * 100).toFixed(0)}}%</span></label>
+            <input id="tts-volume" type="range" min="0" max="1" step="0.05" [value]="tts.volume()" (change)="tts.setVolume(numericValue($event))">
+          </div>
+        }
+      </section>
+    }
+  </div>
+</ng-container>

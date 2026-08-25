@@ -1,0 +1,107 @@
+<main class="search-page" *transloco="let t; prefix: 'interactive-search'">
+  <header class="search-hero">
+    <p class="eyebrow">{{t('eyebrow')}}</p>
+    <h1>{{t('title')}}</h1>
+    <p>{{t('subtitle')}}</p>
+
+    <form class="search-form" [formGroup]="form" (ngSubmit)="search()">
+      <div class="title-field">
+        <label class="visually-hidden" for="release-title">{{t('book-title')}}</label>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="release-title" class="form-control" formControlName="title" [placeholder]="t('title-placeholder')">
+      </div>
+      <input class="form-control" formControlName="author" [placeholder]="t('author-placeholder')" [attr.aria-label]="t('author')">
+      <select class="form-select" formControlName="qualityProfileId" [attr.aria-label]="t('quality-profile')">
+        @for (profile of profiles(); track profile.id) {
+          <option [ngValue]="profile.id">{{profile.name}} · {{profile.language}}</option>
+        }
+      </select>
+      <select class="form-select" formControlName="ownedFormat" [attr.aria-label]="t('owned-format')">
+        <option [ngValue]="null">{{t('not-owned')}}</option>
+        <option [ngValue]="Format.Epub">EPUB</option>
+        <option [ngValue]="Format.Azw3">AZW3</option>
+        <option [ngValue]="Format.Mobi">MOBI</option>
+        <option [ngValue]="Format.Pdf">PDF</option>
+        <option [ngValue]="Format.Cbz">CBZ</option>
+        <option [ngValue]="Format.Cbr">CBR</option>
+      </select>
+      <button class="btn btn-primary" type="submit" [disabled]="form.invalid || searching()">
+        @if (searching()) { <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> }
+        {{t('search')}}
+      </button>
+    </form>
+  </header>
+
+  @if (response(); as data) {
+    @if (data.providerFailures.length > 0) {
+      <section class="provider-failures">
+        @for (failure of data.providerFailures; track failure.providerKey) {
+          <p><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <strong>{{failure.providerName}}</strong>: {{failure.message}}</p>
+        }
+      </section>
+    }
+
+    <section class="results-heading">
+      <div><span>{{data.results.length}}</span> {{t('results')}}</div>
+      <small>{{t('ranking-note')}}</small>
+    </section>
+
+    <div class="results-list">
+      @for (result of data.results; track trackRelease(result)) {
+        <article class="release" [class.rejected]="!result.isApproved">
+          <div class="format">{{formatLabel(result.release.format)}}</div>
+          <div class="release-main">
+            <div class="release-title">
+              <h2>{{result.release.title}}</h2>
+              @if (result.release.isRetail) { <span class="retail">{{t('retail')}}</span> }
+            </div>
+            <div class="release-meta">
+              <span>{{result.release.providerKey}}</span>
+              <span>{{result.release.sizeBytes | bytes}}</span>
+              <span>{{result.release.publishedAt | date:'mediumDate'}}</span>
+              <span><i class="fa-solid fa-arrow-up" aria-hidden="true"></i> {{result.release.seeders ?? '—'}}</span>
+              <span><i class="fa-solid fa-users" aria-hidden="true"></i> {{result.release.peers ?? '—'}}</span>
+              <span>{{result.release.language || t('unknown-language')}}</span>
+            </div>
+            @if (result.rejections.length > 0) {
+              <div class="rejections">
+                @for (rejection of result.rejections; track rejection.code) {
+                  <span><i class="fa-solid fa-circle-xmark" aria-hidden="true"></i> {{rejection.message}}</span>
+                }
+              </div>
+            }
+          </div>
+          <div class="score" [class.good]="result.isApproved">
+            <small>{{t('score')}}</small>
+            <strong>{{result.score}}</strong>
+          </div>
+          @if (accountService.canGrabReleases() && result.isApproved && result.grabToken) {
+            @let matchingClients = compatibleClients(result.release.protocol);
+            <div class="grab-controls">
+              <select #client class="form-select client-select" [attr.aria-label]="t('download-client')" [disabled]="matchingClients.length === 0">
+                @for (option of matchingClients; track option.id) {
+                  <option [value]="option.id">{{option.name}}</option>
+                } @empty {
+                  <option value="">{{t('no-compatible-client')}}</option>
+                }
+              </select>
+              <button class="btn btn-primary grab" [disabled]="matchingClients.length === 0 || grabbing() === result.grabToken"
+                      [title]="t('grab')" (click)="grab(result, client.value)">
+                @if (grabbing() === result.grabToken) {
+                  <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                } @else {
+                  <i class="fa-solid fa-download" aria-hidden="true"></i>
+                }
+                {{t('grab')}}
+              </button>
+            </div>
+          } @else if (!result.isApproved) {
+            <span class="rejected-label" [title]="t('rejected')">{{t('rejected-label')}}</span>
+          }
+        </article>
+      } @empty {
+        <div class="empty"><h3>{{t('no-results')}}</h3><p>{{t('no-results-body')}}</p></div>
+      }
+    </div>
+  }
+</main>

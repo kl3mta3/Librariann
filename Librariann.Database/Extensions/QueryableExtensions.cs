@@ -1,0 +1,522 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using Librariann.API.Repositories;
+using Librariann.Common.Extensions;
+using Librariann.Models.DTOs.Annotations;
+using Librariann.Models.DTOs.Filtering.v2.SortFields;
+using Librariann.Models.DTOs.Filtering.v2.SortOptions;
+using Librariann.Models.DTOs.LibrariannPlus.Manage;
+using Librariann.Models.Entities;
+using Librariann.Models.Entities.Enums;
+using Librariann.Models.Entities.Person;
+using Librariann.Models.Entities.ReadingLists;
+using Librariann.Models.Entities.Scrobble;
+using Librariann.Models.Entities.User;
+using Microsoft.EntityFrameworkCore;
+
+namespace Librariann.Database.Extensions;
+
+public static class QueryableExtensions
+{
+    private const float DefaultTolerance = 0.001f;
+
+    /// <summary>
+    /// Filters Series to those whose parsed name matches - against the stored normalized columns
+    /// (NormalizedName / NormalizedLocalizedName / NormalizedOriginalName). This is the canonical
+    /// folder-to-series name predicate; keep all lookups routed through here so they stay consistent.
+    /// </summary>
+    /// <param name="query"></param>
+    /// <param name="seriesName">Raw series name (will be normalized)</param>
+    /// <param name="localizedName">Raw localized name (will be normalized); may be empty</param>
+    public static IQueryable<Series> WhereSeriesNameMatches(this IQueryable<Series> query, string seriesName, string localizedName)
+    {
+        var normalizedSeries = seriesName.ToNormalized();
+        var normalizedLocalized = localizedName.ToNormalized();
+
+        return query.Where(s =>
+            s.NormalizedName == normalizedSeries
+            || s.NormalizedName == normalizedLocalized
+
+            || s.NormalizedLocalizedName == normalizedSeries
+            || (!string.IsNullOrEmpty(normalizedLocalized) && s.NormalizedLocalizedName == normalizedLocalized)
+
+            || s.NormalizedOriginalName == normalizedSeries
+            || (!string.IsNullOrEmpty(normalizedLocalized) && s.NormalizedOriginalName == normalizedLocalized)
+        );
+    }
+
+    public static Task<AgeRestriction> GetUserAgeRestriction(this DbSet<AppUser> queryable, int userId, CancellationToken ct = default)
+    {
+        if (userId < 1)
+        {
+            return Task.FromResult(new AgeRestriction()
+            {
+                AgeRating = AgeRating.NotApplicable,
+                IncludeUnknowns = true
+            });
+        }
+        return queryable
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u =>
+                new AgeRestriction(){
+                    AgeRating = u.AgeRestriction,
+                    IncludeUnknowns = u.AgeRestrictionIncludeUnknowns
+                })
+            .SingleAsync(ct);
+    }
+
+
+    /// <summary>
+    /// Applies restriction based on if the Library has restrictions (like include in search)
+    /// </summary>
+    /// <param name="query"></param>
+    /// <param name="context"></param>
+    /// <returns></returns>
+    public static IQueryable<Library> IsRestricted(this IQueryable<Library> query, QueryContext context)
+    {
+        if (context.HasFlag(QueryContext.None)) return query;
+
+        if (context.HasFlag(QueryContext.Dashboard))
+        {
+            query = query.Where(l => l.IncludeInDashboard);
+        }
+
+        if (context.HasFlag(QueryContext.Search))
+        {
+            query = query.Where(l => l.IncludeInSearch);
+        }
+
+        return query;
+    }
+
+    /// <summary>
+    /// Returns all libraries for a given user
+    /// </summary>
+    /// <param name="library"></param>
+    /// <param name="userId"></param>
+    /// <param name="queryContext"></param>
+    /// <returns></returns>
+    public static IQueryable<int> GetUserLibraries(this IQueryable<Library> library, int userId, QueryContext queryContext = QueryContext.None)
+    {
+        return library
+            .Include(l => l.AppUsers)
+            .Where(lib => lib.AppUsers.Any(user => user.Id == userId))
+            .IsRestricted(queryContext)
+            .AsSplitQuery()
+            .Select(lib => lib.Id);
+    }
+
+    /// <summary>
+    /// Returns all library ids for a user
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <param name="libraryId">0 for no library filter</param>
+    /// <param name="queryContext">Defaults to None - The context behind this query, so appropriate restrictions can be placed</param>
+    /// <returns></returns>
+    public static IQueryable<int> GetLibraryIdsForUser(this DbSet<AppUser> query, int userId, int libraryId = 0, QueryContext queryContext = QueryContext.None)
+    {
+        var user = query
+            .AsSplitQuery()
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .AsSingleQuery();
+
+        if (libraryId == 0)
+        {
+            return user.SelectMany(l => l.Libraries)
+                .IsRestricted(queryContext)
+                .Select(lib => lib.Id);
+        }
+
+        return user.SelectMany(l => l.Libraries)
+            .Where(lib => lib.Id == libraryId)
+            .IsRestricted(queryContext)
+            .Select(lib => lib.Id);
+    }
+
+
+    public static IEnumerable<DateTime> Range(this DateTime startDate, int numberOfDays) =>
+        Enumerable.Range(0, numberOfDays).Select(e => startDate.AddDays(e));
+
+    public static IQueryable<T> WhereIf<T>(this IQueryable<T> queryable, bool condition,
+        Expression<Func<T, bool>> predicate)
+    {
+        return condition ? queryable.Where(predicate) : queryable;
+    }
+
+
+    public static IQueryable<T> WhereGreaterThan<T>(this IQueryable<T> source,
+                                                    Expression<Func<T, float>> selector,
+                                                    float value)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        var greaterThanExpression = Expression.GreaterThan(propertyAccess, Expression.Constant(value));
+        var lambda = Expression.Lambda<Func<T, bool>>(greaterThanExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    public static IQueryable<T> WhereGreaterThanOrEqual<T>(this IQueryable<T> source,
+                                                           Expression<Func<T, float>> selector,
+                                                           float value)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        var greaterThanExpression = Expression.GreaterThanOrEqual(propertyAccess, Expression.Constant(value));
+        var lambda = Expression.Lambda<Func<T, bool>>(greaterThanExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    public static IQueryable<T> WhereLessThan<T>(this IQueryable<T> source,
+                                                 Expression<Func<T, float>> selector,
+                                                 float value)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        var lessThanExpression = Expression.LessThan(propertyAccess, Expression.Constant(value));
+        var lambda = Expression.Lambda<Func<T, bool>>(lessThanExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    public static IQueryable<T> WhereLessThanOrEqual<T>(this IQueryable<T> source,
+                                                        Expression<Func<T, float>> selector,
+                                                        float value)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        var lessThanOrEqualExpression = Expression.LessThanOrEqual(propertyAccess, Expression.Constant(value));
+        var lambda = Expression.Lambda<Func<T, bool>>(lessThanOrEqualExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    public static IQueryable<T> WhereEqual<T>(this IQueryable<T> source,
+        Expression<Func<T, float>> selector,
+        float value,
+        float tolerance = DefaultTolerance)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        // Absolute difference comparison: Math.Abs(propertyAccess - value) < tolerance
+        var difference = Expression.Subtract(propertyAccess, Expression.Constant(value));
+        var absoluteDifference = Expression.Condition(
+            Expression.LessThan(difference, Expression.Constant(0f)),
+            Expression.Negate(difference),
+            difference);
+
+        var toleranceExpression = Expression.LessThan(absoluteDifference, Expression.Constant(tolerance));
+        var lambda = Expression.Lambda<Func<T, bool>>(toleranceExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    public static IQueryable<T> WhereNotEqual<T>(this IQueryable<T> source,
+        Expression<Func<T, float>> selector,
+        float value,
+        float tolerance = DefaultTolerance)
+    {
+        var parameter = selector.Parameters[0];
+        var propertyAccess = selector.Body;
+
+        var difference = Expression.Subtract(propertyAccess, Expression.Constant(value));
+        var absoluteDifference = Expression.Condition(
+            Expression.LessThan(difference, Expression.Constant(0f)),
+            Expression.Negate(difference),
+            difference);
+
+        var toleranceExpression = Expression.GreaterThan(absoluteDifference, Expression.Constant(tolerance));
+        var lambda = Expression.Lambda<Func<T, bool>>(toleranceExpression, parameter);
+
+        return source.Where(lambda);
+    }
+
+    /// <summary>
+    /// Performs a WhereLike that ORs multiple fields
+    /// </summary>
+    /// <param name="queryable"></param>
+    /// <param name="propertySelectors"></param>
+    /// <param name="searchQuery"></param>
+    /// <typeparam name="T"></typeparam>
+    /// <returns></returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static IQueryable<T> WhereLike<T>(this IQueryable<T> queryable, bool condition, List<Expression<Func<T, string>>> propertySelectors, string searchQuery)
+        where T : class
+    {
+        if (!condition || string.IsNullOrEmpty(searchQuery)) return queryable;
+
+        var method = typeof(DbFunctionsExtensions).GetMethod(nameof(DbFunctionsExtensions.Like), [typeof(DbFunctions), typeof(string), typeof(string)
+        ]);
+        var dbFunctions = typeof(EF).GetMethod(nameof(EF.Functions))?.Invoke(null, null);
+        var searchExpression = Expression.Constant($"%{searchQuery}%");
+
+        Expression? orExpression = null;
+        foreach (var propertySelector in propertySelectors)
+        {
+            var likeExpression = Expression.Call(method, Expression.Constant(dbFunctions), propertySelector.Body, searchExpression);
+            var lambda = Expression.Lambda<Func<T, bool>>(likeExpression, propertySelector.Parameters[0]);
+            orExpression = orExpression == null ? lambda.Body : Expression.OrElse(orExpression, lambda.Body);
+        }
+
+        if (orExpression == null)
+        {
+            throw new ArgumentNullException(nameof(orExpression));
+        }
+
+        var combinedLambda = Expression.Lambda<Func<T, bool>>(orExpression, propertySelectors[0].Parameters[0]);
+        return queryable.Where(combinedLambda);
+    }
+
+    public static IQueryable<ScrobbleEvent> SortBy(this IQueryable<ScrobbleEvent> query, ScrobbleEventSortField sort, bool isDesc = false)
+    {
+        if (isDesc)
+        {
+            return sort switch
+            {
+                ScrobbleEventSortField.None => query,
+                ScrobbleEventSortField.Created => query.OrderByDescending(s => s.Created),
+                ScrobbleEventSortField.LastModified => query.OrderByDescending(s => s.LastModified),
+                ScrobbleEventSortField.Type => query.OrderByDescending(s => s.ScrobbleEventType),
+                ScrobbleEventSortField.Series => query.OrderByDescending(s => s.Series.NormalizedName),
+                ScrobbleEventSortField.IsProcessed => query.OrderByDescending(s => s.IsProcessed),
+                ScrobbleEventSortField.ScrobbleEventFilter => query.OrderByDescending(s => s.ScrobbleEventType),
+                _ => query
+            };
+        }
+
+        return sort switch
+        {
+            ScrobbleEventSortField.None => query,
+            ScrobbleEventSortField.Created => query.OrderBy(s => s.Created),
+            ScrobbleEventSortField.LastModified => query.OrderBy(s => s.LastModified),
+            ScrobbleEventSortField.Type => query.OrderBy(s => s.ScrobbleEventType),
+            ScrobbleEventSortField.Series => query.OrderBy(s => s.Series.NormalizedName),
+            ScrobbleEventSortField.IsProcessed => query.OrderBy(s => s.IsProcessed),
+            ScrobbleEventSortField.ScrobbleEventFilter => query.OrderBy(s => s.ScrobbleEventType),
+            _ => query
+        };
+    }
+
+    public static IQueryable<Person> SortBy(this IQueryable<Person> query, PersonSortOptionDto? sort)
+    {
+        if (sort == null)
+        {
+            return query.OrderBy(p => p.Name);
+        }
+
+        return sort.SortField switch
+        {
+            PersonSortField.Name when sort.IsAscending => query.OrderBy(p => p.Name.ToLower()),
+            PersonSortField.Name => query.OrderByDescending(p => p.Name.ToLower()),
+            PersonSortField.SeriesCount when sort.IsAscending => query.OrderBy(p => p.SeriesMetadataPeople.Count),
+            PersonSortField.SeriesCount => query.OrderByDescending(p => p.SeriesMetadataPeople.Count),
+            PersonSortField.ChapterCount when sort.IsAscending => query.OrderBy(p => p.ChapterPeople.Count),
+            PersonSortField.ChapterCount => query.OrderByDescending(p => p.ChapterPeople.Count),
+            _ => query.OrderBy(p => p.Name),
+        };
+    }
+
+    public static IQueryable<ReadingList> SortBy(this IQueryable<ReadingList> query, ReadingListSortOptionDto? sort)
+    {
+        if (sort == null)
+        {
+            return query.OrderBy(p => p.Title.ToLower());
+        }
+
+        return sort.SortField switch
+        {
+            ReadingListSortField.Title when sort.IsAscending => query.OrderBy(p => p.Title.ToLower()),
+            ReadingListSortField.Title  => query.OrderByDescending(p => p.Title.ToLower()),
+            ReadingListSortField.ReleaseYearStart when sort.IsAscending => query.OrderBy(r => r.StartingYear),
+            ReadingListSortField.ReleaseYearStart => query.OrderByDescending(r => r.StartingYear),
+            ReadingListSortField.ReleaseYearEnd when sort.IsAscending => query.OrderBy(r => r.EndingYear),
+            ReadingListSortField.ReleaseYearEnd => query.OrderByDescending(r => r.EndingYear),
+            ReadingListSortField.ItemCount when sort.IsAscending => query.OrderBy(r => r.Items.Count),
+            ReadingListSortField.ItemCount =>  query.OrderByDescending(r => r.Items.Count),
+            _ => query.OrderBy(p => p.Title.ToLower()),
+        };
+    }
+
+    public static IQueryable<AppUserAnnotation> SortBy(this IQueryable<AppUserAnnotation> query, AnnotationSortOptionDto? sort)
+    {
+        if (sort == null)
+        {
+            return query.OrderBy(a => a.CreatedUtc);
+        }
+
+        return sort.SortField switch
+        {
+            AnnotationSortField.Owner when sort.IsAscending => query.OrderBy(a => a.AppUser.UserName),
+            AnnotationSortField.Owner => query.OrderByDescending(a => a.AppUser.UserName),
+            AnnotationSortField.Created when sort.IsAscending => query.OrderBy(a => a.CreatedUtc),
+            AnnotationSortField.Created => query.OrderByDescending(a => a.CreatedUtc),
+            AnnotationSortField.LastModified when sort.IsAscending => query.OrderBy(a => a.LastModifiedUtc),
+            AnnotationSortField.LastModified => query.OrderByDescending(a => a.LastModifiedUtc),
+            AnnotationSortField.Color when sort.IsAscending => query.OrderBy(a => a.SelectedSlotIndex),
+            AnnotationSortField.Color => query.OrderByDescending(a => a.SelectedSlotIndex),
+            _ => query.OrderBy(a => a.CreatedUtc),
+        };
+    }
+
+    /// <summary>
+    /// Performs either OrderBy or OrderByDescending on the given query based on the value of SortOptions.IsAscending.
+    /// </summary>
+    /// <param name="query"></param>
+    /// <param name="keySelector"></param>
+    /// <param name="sortOptionDto"></param>
+    /// <returns></returns>
+    public static IOrderedQueryable<T> DoOrderBy<T, TKey>(this IQueryable<T> query, Expression<Func<T, TKey>> keySelector, SeriesSortOptionDto sortOptionDto)
+    {
+        return sortOptionDto.IsAscending ? query.OrderBy(keySelector) : query.OrderByDescending(keySelector);
+    }
+
+    public static IQueryable<Series> FilterMatchState(this IQueryable<Series> query, MatchStateOption stateOption)
+    {
+        return stateOption switch
+        {
+            MatchStateOption.All => query,
+            MatchStateOption.Matched => query
+                .Include(s => s.ExternalSeriesMetadata)
+                .WhereMatchedExternalMetadata(),
+            MatchStateOption.NotMatched => query.
+                Include(s => s.ExternalSeriesMetadata)
+                .Where(s => (s.ExternalSeriesMetadata == null || s.ExternalSeriesMetadata.ValidUntilUtc == DateTime.MinValue) && !s.IsBlacklisted && !s.DontMatch),
+            MatchStateOption.Error => query.Where(s => s.IsBlacklisted && !s.DontMatch),
+            MatchStateOption.DontMatch => query.Where(s => s.DontMatch),
+            _ => query
+        };
+    }
+
+    /// <summary>
+    /// Filters to series that have been successfully matched in Librariann+:
+    /// has ExternalSeriesMetadata with a populated ValidUntilUtc and is not blacklisted.
+    /// </summary>
+    public static IQueryable<Series> WhereMatchedExternalMetadata(this IQueryable<Series> query)
+    {
+        return query
+            .Where(s => !s.IsBlacklisted)
+            .Where(s => s.ExternalSeriesMetadata != null && s.ExternalSeriesMetadata.ValidUntilUtc > DateTime.MinValue);
+    }
+
+    /// <summary>
+    /// Filters to series that are matched but whose cached metadata has expired and needs a refresh.
+    /// A stale series is still considered matched, the data is just out of date.
+    /// </summary>
+    public static IQueryable<Series> WhereStaleExternalMetadata(this IQueryable<Series> query)
+    {
+        return query
+            .Where(s => !s.IsBlacklisted)
+            .Where(s => s.ExternalSeriesMetadata != null && s.ExternalSeriesMetadata!.ValidUntilUtc < DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Filters a sequence to elements where the specified key falls within an inclusive range.
+    /// </summary>
+    /// <param name="keySelector">Expression to extract the comparable key</param>
+    /// <param name="start">Inclusive lower bound</param>
+    /// <param name="end">Inclusive upper bound</param>
+    public static IQueryable<T> Between<T>(
+        this IQueryable<T> source,
+        Expression<Func<T, DateTime>> keySelector,
+        DateTime start,
+        DateTime end)
+    {
+        var parameter = keySelector.Parameters[0];
+        var memberAccess = keySelector.Body;
+
+        var greaterOrEqual = Expression.GreaterThanOrEqual(memberAccess, Expression.Constant(start));
+        var lessOrEqual = Expression.LessThanOrEqual(memberAccess, Expression.Constant(end));
+        var combined = Expression.AndAlso(greaterOrEqual, lessOrEqual);
+
+        return source.Where(Expression.Lambda<Func<T, bool>>(combined, parameter));
+    }
+
+    public static IQueryable<FullAnnotationDto> OrderFullAnnotation(this IQueryable<FullAnnotationDto> query)
+    {
+        return query
+            .OrderBy(a => a.SeriesId)
+            .ThenBy(a => a.VolumeId)
+            .ThenBy(a => a.ChapterId)
+            .ThenBy(a => a.PageNumber);
+    }
+
+    /// <summary>
+    /// Splits up a query into batches
+    /// </summary>
+    /// <param name="source"></param>
+    /// <param name="batchSize"></param>
+    /// <param name="batchQuery"></param>
+    /// <typeparam name="T"></typeparam>
+    /// <typeparam name="TKey"></typeparam>
+    /// <typeparam name="TValue"></typeparam>
+    /// <returns></returns>
+    public static async Task<Dictionary<TKey, TValue>> BatchToDictionaryAsync<T, TKey, TValue>(
+        this IList<T> source,
+        int batchSize,
+        Func<IList<T>, Task<Dictionary<TKey, TValue>>> batchQuery)
+        where TKey : notnull
+    {
+        var result = new Dictionary<TKey, TValue>();
+
+        foreach (var batch in source.Chunk(batchSize))
+        {
+            var batchResult = await batchQuery(batch.ToList());
+            foreach (var kvp in batchResult)
+                result[kvp.Key] = kvp.Value;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a <see cref="IAsyncEnumerable"/> that loads <see cref="batchSize"/> into memory at once and then yields
+    /// </summary>
+    /// <param name="query"></param>
+    /// <param name="batchSize"></param>
+    /// <param name="cancellationToken"></param>
+    /// <typeparam name="T"></typeparam>
+    /// <returns></returns>
+    public static async IAsyncEnumerable<List<T>> BatchToAsyncEnumerable<T>(
+        this IOrderedQueryable<T> query,
+        int batchSize,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (batchSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(batchSize), "Batch size must be greater than zero.");
+
+        var skip = 0;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var batch = await query
+                .Skip(skip)
+                .Take(batchSize)
+                .ToListAsync(cancellationToken);
+
+            if (batch.Count == 0)
+                yield break;
+
+            yield return batch;
+
+            if (batch.Count < batchSize)
+                yield break;
+
+            skip += batchSize;
+        }
+    }
+}

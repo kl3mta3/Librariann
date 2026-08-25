@@ -1,0 +1,33 @@
+a:not(.dark-exempt, .btn) {
+    color: var(--primary-color);
+    > i {
+      color: var(--primary-color);
+    }
+  }
+
+  a.btn {
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: none;
+    }
+  }
+
+a.read-more-link {
+    font-weight: bold;
+    text-decoration: none;
+    cursor: pointer;
+    color: var(--body-text-color) !important;
+
+    &:hover {
+      text-decoration: none;
+    }
+}
+
+a {
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
